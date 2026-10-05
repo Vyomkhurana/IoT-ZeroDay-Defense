@@ -1,0 +1,20 @@
+# Overlay that switches any experiment to the SYNTHETIC test dataset with a reduced
+# budget. Usage:  python scripts/run_experiments.py --overlay configs/synthetic.yaml
+# Synthetic results only validate the pipeline; never report them as findings.
+# Outputs go to results/synthetic/ so they can never mix with real-data results.
+experiment:
+  output_dir: results/synthetic/experiments
+data:
+  dataset: synthetic
+  holdout_classes: [udp_flood, c2_beacon]
+  log_transform: true
+partition:
+  num_clients: 6
+  min_benign_per_client: 100
+model:
+  hidden_dims: [32, 16]
+  latent_dim: 8
+training:
+  epochs: 10
+federated:
+  rounds: 10

@@ -1,0 +1,27 @@
+# Fast end-to-end check of the complete pipeline on SYNTHETIC data (~1 minute on CPU).
+# Exercises: non-IID partitioning, zero-day holdout, FedProx, DP-SGD + accounting,
+# secure aggregation with a simulated client dropout, federated thresholding, plots.
+# Synthetic results are NOT research results.
+base: [default.yaml, synthetic.yaml]
+experiment:
+  name: smoke_test
+  description: Pipeline smoke test (synthetic data, full PPFL with FedProx and SecAgg dropout).
+training:
+  mode: federated
+  batch_size: 64
+federated:
+  strategy: fedprox
+  mu: 0.01
+  rounds: 3
+  local_epochs: 1
+partition:
+  num_clients: 4
+model:
+  hidden_dims: [32, 16]
+  latent_dim: 8
+privacy:
+  enabled: true
+  noise_multiplier: 1.0
+secure_aggregation:
+  enabled: true
+  dropout_rate: 0.3

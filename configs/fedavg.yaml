@@ -1,0 +1,9 @@
+# Mode 2 — plain federated learning (FedAvg), no DP, no secure aggregation.
+base: default.yaml
+experiment:
+  name: fedavg
+  description: Plain FedAvg; raw data stays local but the server sees every client update.
+training:
+  mode: federated
+federated:
+  strategy: fedavg

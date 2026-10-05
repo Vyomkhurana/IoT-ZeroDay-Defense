@@ -1,0 +1,16 @@
+# Mode 5 — proposed system: FedAvg + DP-SGD + secure aggregation.
+base: default.yaml
+experiment:
+  name: full_ppfl
+  description: Full privacy-preserving FL (FedAvg + local DP-SGD + secure aggregation).
+training:
+  mode: federated
+federated:
+  strategy: fedavg
+privacy:
+  enabled: true
+  noise_multiplier: 1.0
+  max_grad_norm: 1.0
+  delta: 1.0e-5
+secure_aggregation:
+  enabled: true

@@ -1,0 +1,49 @@
+# Experiment suites for scripts/run_experiments.py.
+#
+# A suite is either a list of config files, or a parameter sweep over one config:
+#   config: <file>          base config of the sweep
+#   parameter: <dotted.key> value that is varied
+#   values: [...]
+#   name: <template>        experiment name; {value} is substituted
+#
+# Paths are relative to this file.
+
+suites:
+  # O5 — the five modes of the study (+ local-only and FedProx variants)
+  main:
+    - centralized.yaml
+    - local.yaml
+    - fedavg.yaml
+    - fedprox.yaml
+    - dp.yaml
+    - secure_aggregation.yaml
+    - full_ppfl.yaml
+    - full_ppfl_fedprox.yaml
+
+  # O6 — impact of DP noise: accuracy / privacy trade-off (F1 vs epsilon)
+  privacy:
+    config: full_ppfl.yaml
+    parameter: privacy.noise_multiplier
+    values: [0.4, 0.6, 0.8, 1.0, 1.5, 2.5]
+    name: ppfl_sigma_{value}
+
+  # O6 — number of clients (communication / compute scaling)
+  scalability:
+    config: full_ppfl.yaml
+    parameter: partition.num_clients
+    values: [3, 5, 10, 20]
+    name: ppfl_clients_{value}
+
+  # O6 — client heterogeneity (Dirichlet alpha)
+  heterogeneity:
+    config: fedavg.yaml
+    parameter: partition.dirichlet_alpha
+    values: [0.1, 0.3, 1.0, 10.0]
+    name: fedavg_alpha_{value}
+
+  # O6 — local epochs per round
+  local_epochs:
+    config: full_ppfl.yaml
+    parameter: federated.local_epochs
+    values: [1, 2, 5]
+    name: ppfl_local_epochs_{value}

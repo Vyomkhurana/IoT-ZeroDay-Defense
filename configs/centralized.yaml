@@ -1,0 +1,8 @@
+# Mode 1 — centralized reference (no FL, no DP, no SecAgg) + Isolation Forest / OC-SVM baselines.
+base: default.yaml
+experiment:
+  name: centralized
+  description: All clients' training data pooled at one server (privacy-agnostic upper reference).
+training:
+  mode: centralized
+  epochs: 20

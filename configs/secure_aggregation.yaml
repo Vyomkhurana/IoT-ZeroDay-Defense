@@ -1,0 +1,11 @@
+# Mode 4 — FedAvg + pairwise-masking secure aggregation (no DP).
+base: default.yaml
+experiment:
+  name: secagg_fl
+  description: FedAvg where the server only learns the sum of client updates.
+training:
+  mode: federated
+federated:
+  strategy: fedavg
+secure_aggregation:
+  enabled: true

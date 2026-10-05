@@ -1,0 +1,10 @@
+# Plain FedProx (proximal local objective for non-IID clients), no DP, no SecAgg.
+base: default.yaml
+experiment:
+  name: fedprox
+  description: FedProx with proximal coefficient mu.
+training:
+  mode: federated
+federated:
+  strategy: fedprox
+  mu: 0.01

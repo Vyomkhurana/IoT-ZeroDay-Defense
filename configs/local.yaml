@@ -1,0 +1,8 @@
+# Local-only baseline: each gateway trains alone, no collaboration.
+base: default.yaml
+experiment:
+  name: local_only
+  description: Every client trains its own autoencoder on its own data only.
+training:
+  mode: local
+  epochs: 20

@@ -1,0 +1,127 @@
+# =====================================================================================
+# PPFL-IoT-ZeroDay — default configuration (every tunable value lives here).
+# Other configs inherit from this file via `base: default.yaml` and override keys.
+# Any value can also be overridden on the command line:  --set federated.rounds=5
+# =====================================================================================
+
+experiment:
+  name: default
+  description: ""
+  seed: 42                      # drives data partitioning, init, shuffling, DP noise, SecAgg (if deterministic)
+  output_dir: results/experiments
+  device: auto                  # auto -> cuda if available, else cpu
+  deterministic: true
+  num_threads: null             # torch intra-op threads (null = library default)
+
+data:
+  dataset: nbaiot               # nbaiot | ciciot2023 | ton_iot | bot_iot | synthetic
+  raw_dir: null                 # default: data/raw/<dataset>
+  processed_dir: data/processed
+  benign_label: benign
+  # Attack classes held out from ALL training/validation data and used only at test
+  # time as "zero-day-like" attacks (fnmatch patterns). Default: the entire Mirai
+  # botnet family is unseen; the Gafgyt (BASHLITE) family is "known".
+  holdout_classes: ["mirai_*"]
+  val_fraction: 0.15            # per-client local split
+  test_fraction: 0.25
+  scaler: standard              # standard | minmax (fitted from federated sufficient statistics)
+  log_transform: false          # signed log1p before scaling (useful for heavy-tailed features)
+  clip_value: null              # clip standardised features to [-c, c]
+  train_contamination: 0.0      # fraction of known-attack rows mixed (unlabelled) into AE training
+  max_samples_per_group: 4000   # cap per (device, attack class) when preparing raw data
+  max_benign_samples_per_group: 20000  # cap per (device, benign) when preparing raw data
+  max_missing_fraction: 0.5
+  loader_options: {}            # dataset-specific loader overrides (see src/ppfl/data/loader.py)
+  synthetic:                    # only used when dataset = synthetic (pipeline testing)
+    num_devices: 6
+    benign_per_device: 4000
+    attacks_per_device_class: 500
+    attack_classes: [scan, syn_flood, ack_flood, udp_flood, http_flood, c2_beacon]
+    attack_coverage: 0.85
+    attack_strength: 1.0
+    num_time_windows: 5
+    corrupt_fraction: 0.001
+
+partition:
+  num_clients: 10
+  strategy: dirichlet           # dirichlet | device | iid
+  dirichlet_alpha: 0.5          # lower = more heterogeneous (non-IID) clients
+  stratify_by: [device, label]  # Dirichlet is applied independently to each stratum
+  min_benign_per_client: 200    # every gateway needs benign traffic to learn "normal"
+  max_retries: 200
+
+model:
+  type: autoencoder
+  hidden_dims: [64, 32]
+  latent_dim: 16
+  activation: relu
+  dropout: 0.0
+
+training:
+  mode: federated               # centralized | federated | local
+  epochs: 20                    # centralized / local-only epochs
+  batch_size: 128
+  learning_rate: 1.0e-3
+  optimizer: adam               # adam | adamw | sgd
+  momentum: 0.9                 # sgd only
+  weight_decay: 0.0
+  grad_clip_norm: null          # optional NON-private clipping (DP clipping is privacy.max_grad_norm)
+
+federated:
+  strategy: fedavg              # fedavg | fedprox
+  rounds: 20
+  local_epochs: 2
+  fraction_fit: 1.0             # fraction of clients sampled per round
+  min_fit_clients: 2
+  mu: 0.01                      # FedProx proximal coefficient
+  server_learning_rate: 1.0
+  eval_every: 1                 # monitoring frequency (rounds)
+
+privacy:
+  enabled: false
+  noise_multiplier: 1.0         # sigma: Gaussian noise std = sigma * max_grad_norm
+  max_grad_norm: 1.0            # per-sample L2 clipping bound C
+  delta: 1.0e-5
+  target_epsilon: null          # if set, sigma is calibrated per client to reach this epsilon
+  accountant: rdp               # rdp | prv | gdp
+  poisson_sampling: true
+  secure_mode: false            # cryptographically secure noise (slower, non-reproducible)
+
+secure_aggregation:
+  enabled: false
+  threshold_fraction: 0.6       # Shamir threshold t = ceil(0.6 * clients)
+  dropout_rate: 0.0             # simulated client dropout after key sharing
+  fractional_bits: 24           # fixed-point precision (2^-24)
+  deterministic: false          # true = derive key material from the seed (tests only)
+
+detection:
+  threshold_strategy: percentile  # percentile | validation_f1 | mean_std
+  percentile: 95.0
+  std_factor: 3.0
+  histogram_bins: 4096          # federated threshold calibration grid (log-spaced)
+  histogram_min: 1.0e-8
+  histogram_max: 1.0e6
+  histogram_dp_epsilon: null    # Laplace noise on clients' validation histograms
+
+baselines:                      # centralized classical baselines (run in centralized mode)
+  isolation_forest:
+    enabled: true
+    n_estimators: 200
+    max_samples: auto
+    max_train_samples: 50000
+  one_class_svm:
+    enabled: true
+    kernel: rbf
+    nu: 0.05
+    gamma: scale
+    max_train_samples: 5000
+
+evaluation:
+  batch_size: 4096
+  per_client: true
+  save_scores: true
+  max_saved_scores: 50000
+  make_figures: true
+
+logging:
+  level: INFO

@@ -1,0 +1,8 @@
+# Mode 5 variant — FedProx + DP-SGD + secure aggregation (for strongly non-IID clients).
+base: full_ppfl.yaml
+experiment:
+  name: full_ppfl_fedprox
+  description: Full privacy-preserving FL with FedProx local objective.
+federated:
+  strategy: fedprox
+  mu: 0.01

@@ -1,0 +1,14 @@
+# Mode 3 — FedAvg + example-level DP-SGD on every client (no SecAgg).
+base: default.yaml
+experiment:
+  name: dp_fl
+  description: FedAvg with local DP-SGD (per-sample clipping + Gaussian noise, RDP accounting).
+training:
+  mode: federated
+federated:
+  strategy: fedavg
+privacy:
+  enabled: true
+  noise_multiplier: 1.0
+  max_grad_norm: 1.0
+  delta: 1.0e-5
