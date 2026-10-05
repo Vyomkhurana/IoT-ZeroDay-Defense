@@ -42,6 +42,17 @@ data/raw/nbaiot/Danmini_Doorbell/mirai_attacks/udpplain.csv
 The UCI archive ships the per-device attack folders as `.rar` files — extract them
 first. `features.csv`, `data_summary.csv` and `device_info.csv` are ignored.
 
+The download is 1.8 GB and expands to about 7.6 GB, so it can live outside the
+repository (`--raw-dir`); only the ~150 MB `cleaned.parquet` is needed afterwards.
+With 7-Zip (Git Bash):
+
+```bash
+curl -L -o nbaiot.zip "https://archive.ics.uci.edu/static/public/442/detection+of+iot+botnet+attacks+n+baiot.zip"
+7z x nbaiot.zip -oraw
+for r in raw/*/*.rar; do 7z x "$r" -o"${r%.rar}"; done   # -> <Device>/gafgyt_attacks/*.csv
+python scripts/prepare_data.py --dataset nbaiot --raw-dir raw
+```
+
 Class labels become `benign`, `gafgyt_<attack>` and `mirai_<attack>`; the device name
 is kept for device-aware non-IID partitioning. Two devices (Ennio doorbell and
 Samsung webcam) were not infected by Mirai in the original capture.

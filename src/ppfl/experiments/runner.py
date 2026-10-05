@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Callable
 
 import pandas as pd
 import torch
@@ -76,9 +76,18 @@ def experiment_setup(cfg: Config, dataset: FederatedDataset) -> dict[str, Any]:
     }
 
 
-def run_experiment(cfg: Config, frame: pd.DataFrame | None = None, dataset: FederatedDataset | None = None) -> dict[str, Any]:
-    """Train, evaluate and persist one experiment; returns the metrics dictionary."""
+def run_experiment(
+    cfg: Config,
+    frame: pd.DataFrame | None = None,
+    dataset: FederatedDataset | None = None,
+    on_round: Callable[[dict[str, Any]], None] | None = None,
+) -> dict[str, Any]:
+    """Train, evaluate and persist one experiment; returns the metrics dictionary.
+
+    ``on_round`` is called with each per-round (federated) / per-epoch (centralized) metrics row.
+    """
     tracker = ExperimentTracker(cfg)
+    tracker.on_round = on_round
     setup_logging(cfg.logging.level, tracker.logs_dir)
     set_global_seed(cfg.experiment.seed, cfg.experiment.deterministic)
     if cfg.experiment.num_threads:

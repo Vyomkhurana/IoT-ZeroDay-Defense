@@ -275,11 +275,29 @@ python scripts/run_flower.py --config configs/fedavg.yaml
 
 Console entry points are also installed with `pip install -e .`: `ppfl-prepare`, `ppfl-train`, `ppfl-evaluate`, `ppfl-run-experiments`, `ppfl-report`, `ppfl-clients`.
 
+## Dashboard
+
+```bash
+streamlit run app.py          # opens http://localhost:8501
+```
+
+An interactive front end over the same `ppfl` package. Nothing in it is pre-recorded: training runs when you press the button and detection scores records with the model you just trained.
+
+| Page | What it does |
+|---|---|
+| **Overview** | The problem, the approach, a diagram of one training round and the headline numbers from the finished experiment suite. |
+| **Train live** | Choose the dataset, privacy mode (full PPFL, FL + SecAgg, FL + DP, plain FedAvg, centralized), number of gateways, rounds, noise level σ and data heterogeneity α. Press **Start training** to see each gateway's data, then F1, zero-day recall, false alarms and the privacy budget ε update after every round. The result view shows score distributions with the alert threshold, the detection rate per attack type and per-gateway results. |
+| **Detect attacks** | Streams held-out test records through a trained model in real time. Each record is reconstructed and scored on the spot, and the page shows the alerts, counts of zero-day attacks caught and false alarms. **Why was it flagged?** lists the traffic features the model could not reconstruct for any alert. |
+| **Compare results** | All methods side by side (zero-day recall, F1, ROC-AUC, false alarms, ε, communication), the privacy/utility trade-off across noise levels, and the gateway, heterogeneity and local-epoch sweeps. |
+
+Runs started from the dashboard are written to `results/ui/` (git-ignored).
+
 ## Project Structure
 
 ```
 PPFL-IoT-ZeroDay/
 ├── README.md  LICENSE  .gitignore  requirements.txt  pyproject.toml  train.py
+├── app.py              Streamlit dashboard (streamlit run app.py)
 ├── configs/            default, centralized, local, fedavg, fedprox, dp, secure_aggregation,
 │                       full_ppfl, full_ppfl_fedprox, smoke_test, synthetic (overlay), experiments
 ├── data/               raw/ processed/ (git-ignored) + README.md (download instructions)
@@ -299,7 +317,7 @@ PPFL-IoT-ZeroDay/
 ├── scripts/            prepare_data.py create_clients.py train.py evaluate.py
 │                       run_experiments.py generate_report.py run_flower.py
 ├── tests/              data, model, federated, dp, secure_aggregation, zero_day,
-│                       config_and_pipeline, flower_adapter
+│                       config_and_pipeline, flower_adapter, app
 ├── notebooks/          01_data_exploration 02_client_distribution 03_results_analysis
 ├── docs/               architecture.md methodology.md experiments.md
 └── results/            experiments/ figures/ (generated)

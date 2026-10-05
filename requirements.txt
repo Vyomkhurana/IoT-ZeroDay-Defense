@@ -12,6 +12,10 @@ PyYAML>=6.0
 tqdm>=4.65
 joblib>=1.3
 
+# Dashboard (app.py)
+streamlit>=1.40
+plotly>=5.20
+
 # Testing / notebooks
 pytest>=7.4
 nbformat>=5.9

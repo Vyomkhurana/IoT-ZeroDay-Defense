@@ -21,7 +21,7 @@ from __future__ import annotations
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import numpy as np
 import pandas as pd
@@ -45,6 +45,7 @@ class ExperimentTracker:
             (self.dir / sub).mkdir(parents=True, exist_ok=True)
         self.rows: list[dict[str, Any]] = []
         self.started = datetime.now(timezone.utc)
+        self.on_round: Callable[[dict[str, Any]], None] | None = None  # live progress hook (used by the UI)
 
     @property
     def logs_dir(self) -> Path:
@@ -69,6 +70,8 @@ class ExperimentTracker:
     def log_round(self, row: dict[str, Any]) -> None:
         self.rows.append(row)
         pd.DataFrame(self.rows).to_csv(self.dir / "metrics.csv", index=False)
+        if self.on_round is not None:
+            self.on_round(row)
 
     def save_table(self, df: pd.DataFrame, name: str, index: bool = False) -> None:
         df.to_csv(self.dir / f"{name}.csv", index=index)

@@ -28,6 +28,8 @@ results/*.csv
 results/*.md
 results/*.json
 results/synthetic/
+results/ui/
+results/probe/
 results/notebook_figures/
 !results/experiments/.gitkeep
 !results/figures/.gitkeep
