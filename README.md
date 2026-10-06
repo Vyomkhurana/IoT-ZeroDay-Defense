@@ -1,4 +1,4 @@
-# PPFL-IoT-ZeroDay
+# IoT Zero-Day Defense (PPFL-IoT-ZeroDay)
 
 **Privacy-preserving federated learning framework for zero-day threat detection in IoT networks using anomaly detection, differential privacy, and secure aggregation.**
 
@@ -13,6 +13,20 @@
 This repository is a research prototype. Simulated IoT gateways jointly train an **autoencoder** that models *normal* network traffic, and use its reconstruction error to flag attacks, including attack classes **never seen during training**. Training is federated (raw traffic never leaves a gateway). Each gateway uses **DP-SGD** so that every released update carries an (ε, δ) differential-privacy guarantee. Updates are combined with **pairwise-masking secure aggregation**, so the server only learns their sum.
 
 Everything is configurable from YAML, reproducible from a seed, and measured: detection quality (with **unseen-attack recall** as the headline metric), privacy budget ε, communication bytes and compute time.
+
+## Quick Start
+
+```powershell
+git clone https://github.com/Vyomkhurana/IoT-ZeroDay-Defense.git
+cd IoT-ZeroDay-Defense
+python -m venv .venv
+.venv\Scripts\activate                      # macOS / Linux: source .venv/bin/activate
+pip install -r requirements.txt
+python scripts/prepare_data.py --synthetic  # small test dataset, no download (~10 s)
+streamlit run app.py                        # opens the dashboard at http://localhost:8501
+```
+
+In the dashboard, open **Train live**, press **Start training**, then open **Detect attacks** and press **Stream traffic**. For real results, download N-BaIoT first ([step 3](#3-get-the-data)). The full instructions are in the [Operating Guide](#operating-guide).
 
 ## Problem
 
@@ -202,100 +216,181 @@ Defaults (`configs/default.yaml`): 10 clients, Dirichlet α = 0.5, 20 rounds × 
 
 ## Results
 
-**Results will appear after running the experiments.**
+Measured on **N-BaIoT** (492,641 records from 9 real IoT devices, 115 features). 10 gateways, Dirichlet α = 0.5, 20 rounds × 2 local epochs, seed 42. The whole **Mirai** botnet family (5 attack types) is held out as the zero-day attacks, and the threshold is the 95th percentile of normal validation traffic, so about 5% false alarms.
 
-No numbers are reported here because none have been produced on a real dataset in this repository. Running the pipeline generates:
+| Method | Zero-day caught | Known attacks caught | F1 | ROC-AUC | False alarms | Privacy ε |
+|---|---|---|---|---|---|---|
+| Plain federated (FedAvg) | **99.8%** | 99.7% | 0.993 | 0.989 | 5.2% | – |
+| Full privacy, default settings (batch 128, lr 1e-3, σ = 1.0) | 67.2% | 26.6% | 0.723 | 0.937 | 5.2% | 7.5 |
+| Full privacy, tuned (batch 512, lr 1e-2, ε = 8) | **85.2%** | 46.9% | 0.857 | 0.965 | 5.2% | 8.0 |
+
+**Tuning DP-SGD at a fixed budget (ε = 8, σ calibrated automatically).** Larger batches and a higher learning rate recover most of the accuracy lost to the privacy noise:
+
+| Batch size | Learning rate | Zero-day caught | F1 | ROC-AUC |
+|---|---|---|---|---|
+| 128 | 1e-3 | 70.1% | 0.756 | 0.944 |
+| 512 | 3e-3 | 77.9% | 0.819 | 0.961 |
+| 1024 | 5e-3 | 80.1% | 0.831 | 0.962 |
+| 512 | 1e-2 | **85.2%** | **0.857** | **0.965** |
+
+Reproduce one row:
+
+```bash
+python scripts/train.py --config configs/full_ppfl.yaml --set training.batch_size=512 --set training.learning_rate=0.01 --set privacy.target_epsilon=8 --name ppfl_tuned
+```
+
+The full suite (`python scripts/run_experiments.py --suite all`) adds centralized and local-only references, FedProx, DP-only and SecAgg-only modes, and the noise, gateway-count, heterogeneity and local-epoch sweeps. It writes:
 
 * `results/summary.csv`: one row per (experiment, model) with every metric above.
 * `results/report.md`: Markdown tables built from the measured `metrics.json` files.
-* `results/figures/`: zero-day recall comparison, FPR comparison, centralized vs FL vs DP-FL vs full PPFL, communication cost, F1 vs ε, zero-day recall vs privacy level, convergence overlays, and sweep plots.
-* `results/experiments/<name>/figures/`: training and validation loss vs round, F1 vs round, confusion matrices, reconstruction-error distributions, scores by class, ROC curves, ε vs round, communication per round, client data distribution, per-client performance.
+* `results/figures/`: zero-day recall comparison, FPR comparison, centralized vs FL vs DP-FL vs full PPFL, communication cost, F1 vs ε, zero-day recall vs privacy level, convergence overlays and sweep plots.
+* `results/experiments/<name>/figures/`: loss and F1 per round, confusion matrices, reconstruction-error distributions, scores by class, ROC curves, ε per round, communication per round, client data distribution and per-client performance.
 
-Runs on the synthetic test data are written to `results/synthetic/` and watermarked. They only show that the pipeline works and are **not** research results.
+Runs on the synthetic test data go to `results/synthetic/` and are watermarked. They only show that the pipeline works and are **not** research results.
 
-## Installation
+## Operating Guide
 
-Requires Python ≥ 3.10. A GPU is optional: the models are small MLPs and everything runs on a laptop CPU.
+### 1. Requirements
 
-```bash
-git clone <repository-url> PPFL-IoT-ZeroDay
-cd PPFL-IoT-ZeroDay
+* Python **3.10 or newer** (tested with 3.13), Windows, macOS or Linux.
+* About 2 GB of RAM for the synthetic data, about 6 GB for N-BaIoT. A GPU is optional: the models are small and everything runs on a laptop CPU.
+* About 10 GB of free disk space while unpacking N-BaIoT. Only the 150 MB processed file is kept afterwards.
+
+### 2. Install
+
+**Windows (PowerShell):**
+
+```powershell
+git clone https://github.com/Vyomkhurana/IoT-ZeroDay-Defense.git
+cd IoT-ZeroDay-Defense
 python -m venv .venv
-source .venv/bin/activate            # Windows: .venv\Scripts\activate
-pip install -r requirements.txt      # or: pip install -e ".[dev]"
+.venv\Scripts\activate
+pip install -r requirements.txt
 ```
 
-* **GPU:** install a CUDA build of PyTorch (see pytorch.org). `experiment.device: auto` then uses CUDA automatically; force CPU with `--set experiment.device=cpu`.
-* **Flower (optional):** `pip install "flwr>=1.10"`. Its Ray simulation backend is not required.
-* **Windows + Anaconda:** if you see `OMP: Error #15` (two OpenMP runtimes from conda NumPy and pip PyTorch), use a clean virtual environment. The package already imports scikit-learn first to avoid the clash.
-
-Check the installation (~1 minute):
+**macOS / Linux:**
 
 ```bash
-pytest
+git clone https://github.com/Vyomkhurana/IoT-ZeroDay-Defense.git
+cd IoT-ZeroDay-Defense
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
 ```
 
-## Usage
+`pip install -e ".[dev]"` also works and installs the `ppfl-*` console commands. Optional extras:
+
+* **GPU:** install a CUDA build of PyTorch (see pytorch.org). `experiment.device: auto` then uses it; force CPU with `--set experiment.device=cpu`.
+* **Flower:** `pip install "flwr>=1.10"` for `scripts/run_flower.py`.
+
+Check the installation:
 
 ```bash
-# 1. Data
-python scripts/prepare_data.py --dataset nbaIoT
-python scripts/prepare_data.py --synthetic                         # test data, no download
-
-# 2. Quick end-to-end check (synthetic, full PPFL + FedProx + SecAgg dropout, ~20 s)
-python scripts/train.py --config configs/smoke_test.yaml
-
-# 3. Individual experiments
-python scripts/train.py --config configs/centralized.yaml
-python scripts/train.py --config configs/fedavg.yaml
-python scripts/train.py --config configs/fedprox.yaml
-python scripts/train.py --config configs/dp.yaml
-python scripts/train.py --config configs/secure_aggregation.yaml
-python scripts/train.py --config configs/full_ppfl.yaml
-python train.py --config configs/full_ppfl.yaml                    # same, root entry point
-
-# Any value can be overridden
-python scripts/train.py --config configs/full_ppfl.yaml --set privacy.target_epsilon=3 --name ppfl_eps3
-
-# 4. Re-evaluate a finished experiment (optionally with another threshold rule)
-python scripts/evaluate.py --experiment full_ppfl
-python scripts/evaluate.py --experiment full_ppfl --threshold-strategy validation_f1
-
-# 5. All experiments + report
-python scripts/run_experiments.py                    # main suite (O5)
-python scripts/run_experiments.py --suite all        # + privacy / scalability / heterogeneity / local-epoch sweeps (O6)
-python scripts/generate_report.py
-
-# Same suites on synthetic data (pipeline check, written to results/synthetic/)
-python scripts/run_experiments.py --suite all --overlay configs/synthetic.yaml
-
-# Optional: Flower adapter
-python scripts/run_flower.py --config configs/fedavg.yaml
+python -m pytest            # about 1 minute; 1 test is skipped when Flower is not installed
 ```
 
-Console entry points are also installed with `pip install -e .`: `ppfl-prepare`, `ppfl-train`, `ppfl-evaluate`, `ppfl-run-experiments`, `ppfl-report`, `ppfl-clients`.
+### 3. Get the data
 
-## Dashboard
+| Dataset | Command | Notes |
+|---|---|---|
+| Synthetic | `python scripts/prepare_data.py --synthetic` | Generated in seconds. For testing the pipeline only. |
+| **N-BaIoT** (real) | see below | 1.8 GB download from UCI; used for all reported results. |
+
+N-BaIoT, using 7-Zip on Windows (`7z` must be on the PATH) or `unrar` on macOS/Linux:
 
 ```bash
-streamlit run app.py          # opens http://localhost:8501
+curl -L -o nbaiot.zip "https://archive.ics.uci.edu/static/public/442/detection+of+iot+botnet+attacks+n+baiot.zip"
+7z x nbaiot.zip -oraw
+for r in raw/*/*.rar; do 7z x "$r" -o"${r%.rar}"; done     # Git Bash / macOS / Linux shell
+python scripts/prepare_data.py --dataset nbaiot --raw-dir raw
 ```
 
-An interactive front end over the same `ppfl` package. Nothing in it is pre-recorded: training runs when you press the button and detection scores records with the model you just trained.
+This writes `data/processed/nbaiot/cleaned.parquet`. You can then delete `nbaiot.zip` and `raw/`. More detail and the other supported datasets (CICIoT2023, TON_IoT, Bot-IoT) are in [data/README.md](data/README.md).
+
+### 4. Run the dashboard
+
+```bash
+streamlit run app.py
+```
+
+Your browser opens at **http://localhost:8501** (use `--server.port 8502` if that port is taken). Stop the dashboard with **Ctrl + C** in the terminal. The dashboard runs the real `ppfl` code: training happens when you press the button, and detection scores records with the model you just trained.
 
 | Page | What it does |
 |---|---|
 | **Overview** | The problem, the approach, a diagram of one training round and the headline numbers from the finished experiment suite. |
-| **Train live** | Choose the dataset, privacy mode (full PPFL, FL + SecAgg, FL + DP, plain FedAvg, centralized), number of gateways, rounds, noise level σ and data heterogeneity α. Press **Start training** to see each gateway's data, then F1, zero-day recall, false alarms and the privacy budget ε update after every round. The result view shows score distributions with the alert threshold, the detection rate per attack type and per-gateway results. |
-| **Detect attacks** | Streams held-out test records through a trained model in real time. Each record is reconstructed and scored on the spot, and the page shows the alerts, counts of zero-day attacks caught and false alarms. **Why was it flagged?** lists the traffic features the model could not reconstruct for any alert. |
-| **Compare results** | All methods side by side (zero-day recall, F1, ROC-AUC, false alarms, ε, communication), the privacy/utility trade-off across noise levels, and the gateway, heterogeneity and local-epoch sweeps. |
+| **Train live** | Choose the dataset, privacy mode (full privacy, FL + secure aggregation, FL + DP, plain FedAvg, centralized), number of gateways and rounds, plus noise level σ, data heterogeneity α and seed under *Advanced settings*. **Start training** shows each gateway's data, then F1, zero-day recall, false alarms and ε after every round. The result view shows score distributions with the alert threshold, the detection rate per attack type and per-gateway results. |
+| **Detect attacks** | Streams held-out test records through a trained model in real time. Each record is reconstructed and scored on the spot, and the page counts alerts, zero-day attacks caught and false alarms. **Why was it flagged?** shows which traffic features the model could not reconstruct. |
+| **Compare results** | All methods side by side (zero-day recall, F1, ROC-AUC, false alarms, ε, data sent), the privacy/accuracy trade-off across noise levels, and the gateway, heterogeneity and local-epoch sweeps. |
 
-Runs started from the dashboard are written to `results/ui/` (git-ignored).
+**Suggested 5-minute demo**
+
+1. **Overview:** explain the problem and the diagram.
+2. **Train live:** dataset *N-BaIoT*, mode *Plain federated*, 10 rounds, then **Start training**. Zero-day recall climbs to about 99% in under a minute.
+3. Same page, mode *Full privacy*, then **Start training**. Detection is lower and ε rises every round. This is the cost of privacy.
+4. **Detect attacks:** **Stream traffic**, then pick an alert under **Why was it flagged?**
+5. **Compare results:** every method side by side (after the experiment suite has been run).
+
+Dashboard runs are written to `results/ui/` (git-ignored).
+
+### 5. Command line
+
+| Task | Command |
+|---|---|
+| Quick end-to-end check (synthetic, about 20 s) | `python scripts/train.py --config configs/smoke_test.yaml` |
+| Train one mode | `python scripts/train.py --config configs/<mode>.yaml` |
+| Train on synthetic data instead | add `--overlay configs/synthetic.yaml` |
+| Change any setting | add `--set key=value` (repeatable), e.g. `--set federated.rounds=40` |
+| Name the run | add `--name my_run` |
+| Re-evaluate a finished run | `python scripts/evaluate.py --experiment full_ppfl [--threshold-strategy validation_f1]` |
+| Inspect the client partition | `python scripts/create_clients.py --config configs/fedavg.yaml [--export]` |
+| Run the main comparison | `python scripts/run_experiments.py` |
+| Run everything (main + all sweeps) | `python scripts/run_experiments.py --suite all` |
+| List what a suite would run | `python scripts/run_experiments.py --suite all --list` |
+| Rebuild report and figures | `python scripts/generate_report.py` |
+| Flower adapter (optional) | `python scripts/run_flower.py --config configs/fedavg.yaml` |
+
+Modes (`configs/`): `centralized`, `local`, `fedavg`, `fedprox`, `dp`, `secure_aggregation`, `full_ppfl`, `full_ppfl_fedprox`. All defaults live in `configs/default.yaml`. Settings you will change most often:
+
+| Setting | Meaning | Default |
+|---|---|---|
+| `federated.rounds` | training rounds | 20 |
+| `federated.local_epochs` | passes over local data per round | 2 |
+| `partition.num_clients` | number of gateways | 10 |
+| `partition.dirichlet_alpha` | data heterogeneity (lower = more different gateways) | 0.5 |
+| `privacy.noise_multiplier` | DP noise σ (higher = more private) | 1.0 |
+| `privacy.target_epsilon` | set a privacy budget instead of σ | null |
+| `training.batch_size` / `training.learning_rate` | optimiser settings | 128 / 1e-3 |
+| `data.holdout_classes` | attack classes treated as zero-day | `["mirai_*"]` |
+| `secure_aggregation.dropout_rate` | simulated gateway dropouts | 0.0 |
+
+Each run writes to `results/experiments/<name>/`: `metrics.json` (all final metrics), `metrics.csv` (per round), `config.yaml`, `environment.json`, the trained model in `model/`, plots in `figures/` and logs in `logs/`. `ppfl-prepare`, `ppfl-train`, `ppfl-evaluate`, `ppfl-run-experiments`, `ppfl-report` and `ppfl-clients` are the same commands after `pip install -e .`.
+
+### 6. Run the tests
+
+```bash
+python -m pytest                         # whole suite
+python -m pytest tests/test_app.py       # dashboard only
+python -m pytest -k secure_aggregation   # one area
+```
+
+The suite covers data loading and partitioning, the model, FedAvg/FedProx, DP-SGD clipping, noise and accounting, secure aggregation (exact sums and dropout recovery), the zero-day split, end-to-end runs of every mode, reproducibility and the dashboard.
+
+### 7. Troubleshooting
+
+| Problem | Fix |
+|---|---|
+| `streamlit` / `python` is not recognized | Activate the virtual environment first (`.venv\Scripts\activate`), or run `python -m streamlit run app.py`. |
+| `File does not exist: app.py` | Run the command from the `IoT-ZeroDay-Defense` folder (`cd IoT-ZeroDay-Defense`). |
+| Streamlit asks for an email on first start | Press Enter to skip. |
+| `Port 8501 is already in use` | `streamlit run app.py --server.port 8502` |
+| `No N-BaIoT CSV files found` / dashboard shows no dataset | Prepare the data first (step 3). |
+| `OMP: Error #15` (Windows + Anaconda) | Use a clean virtual environment (step 2). The package imports scikit-learn first to avoid the clash. |
+| Full-privacy training is slow | DP-SGD computes a gradient per record. Use fewer rounds, or `--set training.batch_size=512` (also more accurate, see Results). |
 
 ## Project Structure
 
 ```
-PPFL-IoT-ZeroDay/
+IoT-ZeroDay-Defense/
 ├── README.md  LICENSE  .gitignore  requirements.txt  pyproject.toml  train.py
 ├── app.py              Streamlit dashboard (streamlit run app.py)
 ├── configs/            default, centralized, local, fedavg, fedprox, dp, secure_aggregation,
