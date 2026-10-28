@@ -67,12 +67,11 @@ class IoTClient:
         self.dp_engine: DPSGDEngine | None = None
         if cfg.privacy.enabled:
             f = cfg.federated
-            steps_per_round = f.local_epochs * int(np.ceil(len(self._train_X) / cfg.training.batch_size))
             self.dp_engine = DPSGDEngine(
                 cfg.privacy,
                 num_samples=len(self._train_X),
                 batch_size=cfg.training.batch_size,
-                planned_steps=f.rounds * steps_per_round,
+                planned_epochs=f.rounds * f.local_epochs,
                 seed=cfg.experiment.seed,
                 client_id=self.client_id,
             )
@@ -112,7 +111,9 @@ class IoTClient:
             dp_engine=self.dp_engine,
         )
         local_vector, _ = flatten_state_dict(model.state_dict())
-        self._outbox = build_contribution(local_vector - global_vector, self.num_train_samples, result.final_loss)
+        # the loss is computed from private records without noise, so it is not released under DP
+        released_loss = 0.0 if self.dp_engine else result.final_loss
+        self._outbox = build_contribution(local_vector - global_vector, self.num_train_samples, released_loss)
         stats = ClientRoundStats(
             client_id=self.client_id,
             round=round_idx,

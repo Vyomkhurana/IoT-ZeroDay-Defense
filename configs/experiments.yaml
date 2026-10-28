@@ -19,6 +19,7 @@ suites:
     - secure_aggregation.yaml
     - full_ppfl.yaml
     - full_ppfl_fedprox.yaml
+    - full_ppfl_tuned.yaml
 
   # O6 — impact of DP noise: accuracy / privacy trade-off (F1 vs epsilon)
   privacy:

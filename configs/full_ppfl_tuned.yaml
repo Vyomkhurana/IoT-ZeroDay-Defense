@@ -1,0 +1,10 @@
+# Mode 5, tuned DP-SGD: larger batches and learning rate at a fixed budget (sigma calibrated to epsilon = 8).
+base: full_ppfl.yaml
+experiment:
+  name: full_ppfl_tuned
+  description: Full privacy-preserving FL with tuned DP-SGD (batch 512, lr 1e-2, target epsilon 8).
+training:
+  batch_size: 512
+  learning_rate: 1.0e-2
+privacy:
+  target_epsilon: 8.0

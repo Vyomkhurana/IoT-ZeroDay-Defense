@@ -61,7 +61,9 @@ def run_federated(cfg: Config, dataset: FederatedDataset, tracker: ExperimentTra
         times = [s.compute_time_s for s in summary.client_stats]
         row = {
             "round": r,
-            "train_loss": summary.aggregate.mean_loss,
+            # under DP clients release no loss; log the experimenter-side weighted mean instead
+            "train_loss": float(np.average([s.train_loss for s in summary.client_stats], weights=[s.num_samples for s in summary.client_stats]))
+            if pr.enabled else summary.aggregate.mean_loss,
             "participants": len(summary.participants),
             "dropped": len(summary.dropped),
             "upload_bytes": summary.comm.upload_bytes,

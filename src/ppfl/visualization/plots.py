@@ -198,7 +198,7 @@ def plot_epsilon(history: pd.DataFrame, ledger: pd.DataFrame | None, out: Path, 
 def plot_client_distribution(table: pd.DataFrame, out: Path, synthetic: bool, unseen: list[str] | None = None) -> Path | None:
     if table is None or table.empty:
         return None
-    t = table.set_index(table.columns[0]) if not np.issubdtype(table.iloc[:, 0].dtype, np.number) else table
+    t = table.set_index(table.columns[0]) if not pd.api.types.is_numeric_dtype(table.iloc[:, 0]) else table
     frac = t.div(t.sum(axis=1), axis=0)
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(13, 4.6), gridspec_kw={"width_ratios": [1.3, 1]})
     colors = sns.color_palette("tab20", n_colors=len(t.columns))

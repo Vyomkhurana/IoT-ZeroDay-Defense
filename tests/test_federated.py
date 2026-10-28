@@ -143,6 +143,15 @@ def test_unmasked_updates_are_never_released_with_secagg(tiny_cfg, tiny_dataset)
         client.plain_message()
 
 
+def test_dp_clients_do_not_release_their_training_loss(tiny_cfg, tiny_dataset):
+    cfg = tiny_cfg.copy()
+    cfg.privacy.enabled = True
+    client = IoTClient(tiny_dataset.clients[0], cfg, tiny_dataset.input_dim, torch.device("cpu"))
+    server = FederatedServer(init_model(cfg, tiny_dataset.input_dim), FedAvg(), cfg)
+    stats = client.fit(server.global_vector, server.specs, 1, {"proximal_mu": 0.0})
+    assert stats.train_loss > 0 and client.plain_message()[-1] == 0.0  # [n*delta, n, n*loss]
+
+
 def test_secure_round_with_dropout_uses_survivors_only(tmp_path, tiny_dataset):
     cfg = tiny_config(tmp_path, "partition.num_clients=3", "secure_aggregation.enabled=true",
                       "secure_aggregation.dropout_rate=0.9", "secure_aggregation.threshold_fraction=0.5",

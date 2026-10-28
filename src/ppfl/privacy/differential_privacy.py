@@ -11,7 +11,8 @@ Per optimizer step the mechanism
 
 Everything a client sends afterwards (its model delta, possibly masked by secure
 aggregation) is post-processing of these noisy updates, so the client's
-``(epsilon, delta)`` covers it.
+``(epsilon, delta)`` covers it. Under DP the client does not release its training loss,
+which would be computed from private records without noise.
 """
 
 from __future__ import annotations
@@ -58,7 +59,7 @@ class DPSGDEngine:
         cfg: PrivacyConfig,
         num_samples: int,
         batch_size: int,
-        planned_steps: int,
+        planned_epochs: int,
         seed: int,
         client_id: int = 0,
     ) -> None:
@@ -72,6 +73,9 @@ class DPSGDEngine:
         self.expected_batch_size = max(1, int(num_samples * self.sample_rate))
         self.max_grad_norm = cfg.max_grad_norm
         self.accountant = PrivacyAccountant(cfg.accountant)
+        # Opacus' Poisson sampler takes int(1/q) steps per epoch, which can be one less than ceil(n/B).
+        steps_per_epoch = int(1 / self.sample_rate) if cfg.poisson_sampling else self.batches_per_epoch
+        planned_steps = planned_epochs * steps_per_epoch
         if cfg.target_epsilon is not None:
             self.noise_multiplier = calibrate_noise_multiplier(
                 cfg.target_epsilon, cfg.delta, self.sample_rate, planned_steps, cfg.accountant

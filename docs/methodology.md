@@ -107,10 +107,14 @@ The accountant lives as long as the client, so ε accumulates over **all** round
 client takes part in. The reported ε is the **maximum over clients**: every record of
 every client is covered by (ε, δ). The guarantee is *example-level* DP with respect to
 each client's local dataset. Everything released afterwards (model deltas, masked
-vectors, the global model) is post-processing.
+vectors, the global model) is post-processing. Under DP a client does **not** release its
+training loss (it is computed from private records without noise); the loss curve of DP
+runs is an experimenter-side monitoring value. The sample count n_k is still released
+(in aggregate under SecAgg), as FedAvg weighting requires.
 
 * `target_epsilon` mode: σ is calibrated per client so that, if the client takes part
-  in every round, it ends at exactly the target ε.
+  in every round, it ends at the target ε. The plan uses the int(1/q) steps per epoch
+  that Opacus' Poisson sampler actually takes.
 * **FedProx + DP.** The proximal gradient μ(w − w_t) does not depend on data. It is
   added *after* clipping and noising, which is post-processing. Putting it inside the
   per-sample loss would wrongly clip it.

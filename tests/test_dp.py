@@ -25,7 +25,7 @@ def _one_step_update(noise: float, clip: float, seed: int = 0, n: int = 64, scal
     model = Autoencoder(8, [6], 2)
     before, _ = flatten_state_dict(model.state_dict())
     cfg = PrivacyConfig(enabled=True, noise_multiplier=noise, max_grad_norm=clip, poisson_sampling=False)
-    engine = DPSGDEngine(cfg, num_samples=n, batch_size=n, planned_steps=1, seed=seed)
+    engine = DPSGDEngine(cfg, num_samples=n, batch_size=n, planned_epochs=1, seed=seed)
     train_autoencoder(model, X, epochs=1, cfg=TrainingConfig(batch_size=n, optimizer="sgd", learning_rate=1.0, momentum=0.0),
                       device=CPU, dp_engine=engine)
     after, _ = flatten_state_dict(model.state_dict())
@@ -62,7 +62,7 @@ def test_epsilon_grows_with_steps_and_shrinks_with_noise():
 
 def test_accountant_tracks_training_steps():
     X = np.random.default_rng(0).normal(size=(500, 6)).astype(np.float32)
-    engine = DPSGDEngine(PrivacyConfig(enabled=True, noise_multiplier=1.1), num_samples=500, batch_size=50, planned_steps=20, seed=0)
+    engine = DPSGDEngine(PrivacyConfig(enabled=True, noise_multiplier=1.1), num_samples=500, batch_size=50, planned_epochs=2, seed=0)
     assert engine.epsilon() == 0.0
     train_autoencoder(Autoencoder(6, [4], 2), X, epochs=1, cfg=TrainingConfig(batch_size=50), device=CPU, dp_engine=engine)
     eps1 = engine.epsilon()
@@ -76,8 +76,15 @@ def test_accountant_tracks_training_steps():
 def test_noise_calibration_reaches_target():
     sigma = calibrate_noise_multiplier(target_epsilon=2.0, delta=1e-5, sample_rate=0.02, steps=2000)
     assert compute_epsilon(sigma, 0.02, 2000, 1e-5) <= 2.0 + 1e-2
-    engine = DPSGDEngine(PrivacyConfig(enabled=True, target_epsilon=2.0), num_samples=5000, batch_size=100, planned_steps=2000, seed=0)
+    engine = DPSGDEngine(PrivacyConfig(enabled=True, target_epsilon=2.0), num_samples=5000, batch_size=100, planned_epochs=40, seed=0)
     assert engine.noise_multiplier == pytest.approx(sigma, rel=1e-3)
+
+
+def test_target_epsilon_plans_the_steps_opacus_takes():
+    # 13,381 rows / batch 128 -> q = 1/105, but Opacus' Poisson sampler takes int(1/q) = 104 steps per epoch
+    engine = DPSGDEngine(PrivacyConfig(enabled=True, target_epsilon=8.0), num_samples=13381, batch_size=128, planned_epochs=40, seed=0)
+    assert int(1 / engine.sample_rate) == 104
+    assert engine.noise_multiplier == pytest.approx(calibrate_noise_multiplier(8.0, 1e-5, engine.sample_rate, 40 * 104), rel=1e-6)
 
 
 def test_accountant_manual_record_and_ledger():
