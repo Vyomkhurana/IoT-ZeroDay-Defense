@@ -190,6 +190,18 @@ z     → Linear(16,32) → ReLU → Linear(32,64) → ReLU → Linear(64,d) = x
 
 **Anomaly detection:** score = MSE(x, x̂); anomalous if score > τ. τ comes from validation data only: `percentile` (default, 95th percentile of benign validation errors), `mean_std`, or `validation_f1` (F1-optimal against *known* attacks). Federated runs compute τ from (securely) aggregated score histograms.
 
+## Alert Triage by Retrieval
+
+Our faculty suggested adding a RAG (retrieval-augmented generation) system. We checked whether it fits.
+
+**An LLM-based RAG does not fit the detector.** RAG retrieves text documents and passes them to a language model to generate an answer. This detector works on 115 numeric traffic statistics per record, not text. Retrieving documents would not change whether a record is flagged, so detection quality would stay the same. Sending alerts to a hosted LLM would also move traffic data off the gateway, which is exactly what this project prevents. LLM output cannot be reproduced from a seed or measured with the project's metrics either.
+
+**Retrieval itself does fit, applied to traffic.** When the detector raises an alert, the gateway looks up the 10 most similar records in **its own labelled history** (normal traffic and known attacks; zero-day classes are never in it) in the autoencoder's 16-dimensional latent space (`src/ppfl/detection/retrieval.py`). The majority label says what the alert resembles. The distance, relative to how far known records usually are from each other, says whether it is a variant of known traffic (auto-label it) or a new pattern (escalate it to an analyst). Everything runs on the gateway, so no traffic leaves it. The dashboard shows this for every alert under **Detect attacks → What does it resemble?**
+
+TRIAGE_TABLE
+
+Reproduce with `python scripts/evaluate.py --experiment fedavg --triage`. Retrieval doesn't flag anything new; it explains alerts the autoencoder has already raised.
+
 ## Experimental Setup
 
 | Mode | Config | DP | SecAgg |
@@ -201,6 +213,7 @@ z     → Linear(16,32) → ReLU → Linear(32,64) → ReLU → Linear(64,d) = x
 | 3 FL + DP | `configs/dp.yaml` | ✓ | – |
 | 4 FL + SecAgg | `configs/secure_aggregation.yaml` | – | ✓ |
 | **5 Full PPFL** | `configs/full_ppfl.yaml` (FedAvg), `configs/full_ppfl_fedprox.yaml` | ✓ | ✓ |
+| 5 Full PPFL, tuned DP-SGD (batch 512, lr 1e-2, ε = 8) | `configs/full_ppfl_tuned.yaml` | ✓ | ✓ |
 
 Defaults (`configs/default.yaml`): 10 clients, Dirichlet α = 0.5, 20 rounds × 2 local epochs, batch 128, Adam (lr 1e-3), AE 64-32-16, σ = 1.0, C = 1.0, δ = 1e-5, SecAgg threshold 0.6·n, 95th-percentile threshold, seed 42. Sweeps (O6) are defined in `configs/experiments.yaml`: noise multiplier, number of clients, Dirichlet α, local epochs. See [docs/experiments.md](docs/experiments.md).
 
@@ -319,16 +332,18 @@ Your browser opens at **http://localhost:8501** (use `--server.port 8502` if tha
 |---|---|
 | **Overview** | The problem, the approach, a diagram of one training round and the headline numbers from the finished experiment suite. |
 | **Train live** | Choose the dataset, privacy mode (full privacy, FL + secure aggregation, FL + DP, plain FedAvg, centralized), number of gateways and rounds, plus noise level σ, data heterogeneity α and seed under *Advanced settings*. **Start training** shows each gateway's data, then F1, zero-day recall, false alarms and ε after every round. The result view shows score distributions with the alert threshold, the detection rate per attack type and per-gateway results. |
-| **Detect attacks** | Streams held-out test records through a trained model in real time. Each record is reconstructed and scored on the spot, and the page counts alerts, zero-day attacks caught and false alarms. **Why was it flagged?** shows which traffic features the model could not reconstruct. |
+| **Detect attacks** | Streams held-out test records through a trained model in real time. Each record is reconstructed and scored on the spot, and the page counts alerts, zero-day attacks caught and false alarms. **Why was it flagged?** shows which traffic features the model could not reconstruct, and **What does it resemble?** retrieves the closest known traffic on that gateway ([Alert triage](#alert-triage-by-retrieval)). |
 | **Compare results** | All methods side by side (zero-day recall, F1, ROC-AUC, false alarms, ε, data sent), the privacy/accuracy trade-off across noise levels, and the gateway, heterogeneity and local-epoch sweeps. |
+| **Under the hood** | Evidence you can check live: the secure-aggregation protocol running on three gateways (the masked numbers the server receives, and the exact sum it recovers, also when a gateway drops out), a registry of every experiment run (time, runtime, code version, config fingerprint), and a button that runs the test suite. |
 
-**Suggested 5-minute demo**
+**Suggested 8-minute demo**
 
-1. **Overview:** explain the problem and the diagram.
-2. **Train live:** dataset *N-BaIoT*, mode *Plain federated*, 10 rounds, then **Start training**. Zero-day recall climbs to about 99% in under a minute.
-3. Same page, mode *Full privacy*, then **Start training**. Detection is lower and ε rises every round. This is the cost of privacy.
-4. **Detect attacks:** **Stream traffic**, then pick an alert under **Why was it flagged?**
-5. **Compare results:** every method side by side (after the experiment suite has been run).
+1. **Overview:** explain the problem, the diagram and the headline numbers.
+2. **Train live:** dataset *N-BaIoT*, mode *Plain federated*, 10 rounds, then **Start training**. Zero-day recall climbs to about 99% in about a minute.
+3. Same page, mode *Full privacy*, 5 rounds, then **Start training**. Detection is lower and ε rises every round. This is the cost of privacy.
+4. **Detect attacks:** **Stream traffic**, then pick a zero-day (`mirai_*`) alert. **Why was it flagged?** shows the features; **What does it resemble?** shows the closest known traffic (for `mirai_scan` it is `gafgyt_scan`).
+5. **Compare results:** every method side by side, then the privacy/accuracy curve.
+6. **Under the hood:** **Run the protocol** and switch on the dropout toggle: the server only sees huge random numbers but recovers the exact sum. Then **Run the test suite** (about a minute).
 
 Dashboard runs are written to `results/ui/` (git-ignored).
 
@@ -349,7 +364,7 @@ Dashboard runs are written to `results/ui/` (git-ignored).
 | Rebuild report and figures | `python scripts/generate_report.py` |
 | Flower adapter (optional) | `python scripts/run_flower.py --config configs/fedavg.yaml` |
 
-Modes (`configs/`): `centralized`, `local`, `fedavg`, `fedprox`, `dp`, `secure_aggregation`, `full_ppfl`, `full_ppfl_fedprox`. All defaults live in `configs/default.yaml`. Settings you will change most often:
+Modes (`configs/`): `centralized`, `local`, `fedavg`, `fedprox`, `dp`, `secure_aggregation`, `full_ppfl`, `full_ppfl_fedprox`, `full_ppfl_tuned`. All defaults live in `configs/default.yaml`. Settings you will change most often:
 
 | Setting | Meaning | Default |
 |---|---|---|
@@ -394,7 +409,7 @@ IoT-ZeroDay-Defense/
 ├── README.md  LICENSE  .gitignore  requirements.txt  pyproject.toml  train.py
 ├── app.py              Streamlit dashboard (streamlit run app.py)
 ├── configs/            default, centralized, local, fedavg, fedprox, dp, secure_aggregation,
-│                       full_ppfl, full_ppfl_fedprox, smoke_test, synthetic (overlay), experiments
+│                       full_ppfl, full_ppfl_fedprox, full_ppfl_tuned, smoke_test, synthetic (overlay), experiments
 ├── data/               raw/ processed/ (git-ignored) + README.md (download instructions)
 ├── src/ppfl/
 │   ├── data/           loader.py preprocessing.py partition.py zero_day.py synthetic.py federated_dataset.py
@@ -403,7 +418,7 @@ IoT-ZeroDay-Defense/
 │   ├── federated/      client.py server.py fedavg.py fedprox.py flower_adapter.py
 │   ├── privacy/        differential_privacy.py accountant.py
 │   ├── security/       secure_aggregation.py
-│   ├── detection/      anomaly_score.py threshold.py
+│   ├── detection/      anomaly_score.py threshold.py retrieval.py
 │   ├── evaluation/     metrics.py zero_day_metrics.py evaluator.py comparison.py
 │   ├── visualization/  plots.py
 │   ├── experiments/    centralized.py federated.py local.py runner.py tracking.py common.py
@@ -433,6 +448,7 @@ The code lives in an installable `src/ppfl` package (src layout) instead of a ba
 * **FL alone is not private.** Model updates can leak information about training data. This project never claims otherwise.
 * **SecAgg alone is not DP.** It hides individual updates from the server, but the aggregate and the final model can still leak. DP-SGD provides the formal bound.
 * **DP alone does not hide updates.** Without SecAgg the server sees each (noised) update. The guarantee still holds, but SecAgg adds defence in depth and keeps sample counts and losses private.
+* Under DP a gateway does not release its training loss (it would be computed from private records without noise). It still releases its sample count n_k, which FedAvg weighting needs (only the sum under SecAgg). The feature-scaler statistics (per-feature count, sum, sum of squares) are merged without noise or SecAgg.
 * The DP guarantee is **example-level, per client** (one traffic record). It is not user-level or device-level DP across clients. ε is reported as the worst case over clients. It covers model training. Threshold histograms are covered only if `histogram_dp_epsilon` is set.
 * Secure aggregation assumes an **honest-but-curious** server, and the implementation is a simulation, not hardened cryptography.
 * No secrets or API keys are used or stored. Data is git-ignored.

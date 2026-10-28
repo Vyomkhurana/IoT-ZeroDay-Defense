@@ -10,6 +10,7 @@ Example::
 
     python scripts/evaluate.py --experiment full_ppfl
     python scripts/evaluate.py --experiment full_ppfl --threshold-strategy validation_f1
+    python scripts/evaluate.py --experiment fedavg --triage   # + retrieval-based alert triage
 """
 
 from __future__ import annotations
@@ -21,7 +22,8 @@ from pathlib import Path
 import numpy as np
 import torch
 
-from ppfl.data.federated_dataset import build_federated_dataset
+from ppfl.data.federated_dataset import Split, build_federated_dataset
+from ppfl.detection.retrieval import GatewayMemory, latent_embedder
 from ppfl.detection.threshold import ThresholdResult
 from ppfl.evaluation.evaluator import evaluate_detector
 from ppfl.experiments.common import EvalContext, threshold_to_dict
@@ -40,6 +42,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--results-dir", default="results/experiments")
     parser.add_argument("--threshold-strategy", choices=["percentile", "validation_f1", "mean_std"])
     parser.add_argument("--percentile", type=float)
+    parser.add_argument("--triage", action="store_true", help="also evaluate retrieval-based alert triage (ppfl.detection.retrieval)")
     args = parser.parse_args(argv)
 
     exp_dir = resolve_path(args.results_dir) / args.experiment
@@ -81,6 +84,8 @@ def main(argv: list[str] | None = None) -> int:
         plot_score_distribution(ev.scores, groups, thr.value, out, synthetic)
         plot_scores_by_class(ev.scores, ev.labels, groups, thr.value, out, synthetic)
         plot_roc(ev.scores, groups, out, synthetic)
+        if args.triage:
+            results["triage"] = triage(model, dataset, ev, groups)
     else:
         print("No saved autoencoder (local-only experiments keep per-client models in memory only).")
 
@@ -108,6 +113,26 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  {label:<28s} {info['group']:<14s} n={info['n']:>8,}  flagged={info['flagged_rate']:.4f}")
     print(f"\nWritten to {Path(out)}")
     return 0
+
+
+def triage(model, dataset, ev, groups) -> dict:
+    """Query every alert against its own gateway's labelled history; summarise per traffic group."""
+    embed = latent_embedder(model.cpu())
+    X, flagged = dataset.global_test()[0].X, ev.scores > ev.threshold
+    ratio, closest = np.full(len(flagged), np.nan), np.empty(len(flagged), dtype=object)
+    for c in dataset.clients:
+        m = flagged & (ev.client_ids == c.client_id)
+        if m.any():
+            ref = Split.concat([c.train, c.val])
+            ratio[m], closest[m], _ = GatewayMemory(embed, ref.X, ref.labels).query(X[m])
+    out = {}
+    for g in ("benign", "known_attack", "unseen_attack"):
+        m = flagged & (groups == g)
+        if m.any():
+            top = {str(k): int(v) for k, v in zip(*np.unique(closest[m].astype(str), return_counts=True))}
+            out[g] = {"alerts": int(m.sum()), "new_pattern": float((ratio[m] > 1).mean()), "median_ratio": float(np.median(ratio[m])),
+                      "closest": dict(sorted(top.items(), key=lambda kv: -kv[1])[:3])}
+    return out
 
 
 if __name__ == "__main__":

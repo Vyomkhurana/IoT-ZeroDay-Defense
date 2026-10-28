@@ -9,6 +9,7 @@ experiment folders; nothing is hard-coded.
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -23,10 +24,12 @@ import plotly.graph_objects as go  # noqa: E402
 import streamlit as st  # noqa: E402
 import torch  # noqa: E402
 
-from ppfl.data.federated_dataset import build_federated_dataset  # noqa: E402
+from ppfl.data.federated_dataset import Split, build_federated_dataset  # noqa: E402
 from ppfl.detection.anomaly_score import reconstruction_errors  # noqa: E402
+from ppfl.detection.retrieval import GatewayMemory, latent_embedder  # noqa: E402
 from ppfl.experiments.runner import run_experiment  # noqa: E402
 from ppfl.models.autoencoder import Autoencoder  # noqa: E402
+from ppfl.security.secure_aggregation import FixedPointEncoder, SecureAggregator  # noqa: E402
 from ppfl.utils.config import Config, load_config  # noqa: E402
 from ppfl.utils.serialization import load_json  # noqa: E402
 
@@ -117,6 +120,13 @@ def load_run(run_dir: str, stamp: float):
     return model, float(info["threshold"]["value"]), cfg, get_dataset(data_key(cfg), cfg)
 
 
+@st.cache_resource(show_spinner=False, max_entries=12)
+def gateway_memory(run_dir: str, gateway: int, _model, _dataset) -> GatewayMemory:
+    """Latent-space index of one gateway's own labelled history (``run_dir`` keys the cache)."""
+    ref = Split.concat([_dataset.clients[gateway].train, _dataset.clients[gateway].val])
+    return GatewayMemory(latent_embedder(_model), ref.X, ref.labels)
+
+
 def finished_runs() -> list[Path]:
     runs = [p.parent for p in (ROOT / UI_RUNS).glob("*/*/metrics.json") if (p.parent / "model" / "autoencoder.pt").exists()]
     return sorted(runs, key=lambda p: (p / "metrics.json").stat().st_mtime, reverse=True)
@@ -161,8 +171,10 @@ G1 -> S [label=" 2. train · 3. clip + noise · 4. mask" style=dashed color="#eb
         st.subheader("Zero-day attacks caught")
         st.caption(f"Share of never-seen attack traffic flagged, at about 5% false alarms. From the finished experiment suite ({source}).")
         row = lambda e: df[(df.experiment == e) & (df.model == "autoencoder")].iloc[0] if ((df.experiment == e) & (df.model == "autoencoder")).any() else None  # noqa: E731
-        cols = st.columns(4)
-        for col, (exp, name) in zip(cols, [("centralized", "All data pooled"), ("fedavg", "Federated"), ("secagg_fl", "Federated + SecAgg"), ("full_ppfl", "Full privacy")]):
+        heads = [("centralized", "All data pooled"), ("fedavg", "Federated"), ("secagg_fl", "Federated + SecAgg"), ("full_ppfl", "Full privacy"),
+                 ("full_ppfl_tuned", "Full privacy, tuned")]
+        cols = st.columns(len(heads))
+        for col, (exp, name) in zip(cols, heads):
             r = row(exp)
             if r is not None:
                 col.metric(name, pct(r.unseen_recall), help=f"F1 {r.f1:.3f} · false alarms {pct(r.fpr)} · AUC {r.roc_auc:.3f}")
@@ -342,7 +354,7 @@ def page_detect() -> None:
     elif state and state["run"] == str(run_dir):
         render_stream(view, state["scores"], state["idx"], test, owners, groups, thr, "s_final")
     if state and state["run"] == str(run_dir):
-        explain(model, thr, dataset, test, state)
+        explain(model, thr, dataset, test, owners, state)
 
 
 def render_stream(view, scores, idx, test, owners, groups, thr, key) -> None:
@@ -360,7 +372,7 @@ def render_stream(view, scores, idx, test, owners, groups, thr, key) -> None:
     view["feed"].dataframe(styled, hide_index=True, use_container_width=True, height=460)
 
 
-def explain(model, thr, dataset, test, state) -> None:
+def explain(model, thr, dataset, test, owners, state) -> None:
     idx, scores = state["idx"], state["scores"]
     flagged = [int(i) for i, s in zip(idx, scores) if s > thr]
     if not flagged:
@@ -378,6 +390,19 @@ def explain(model, thr, dataset, test, state) -> None:
     st.plotly_chart(style(fig, 360, title="Traffic features the model could not rebuild (largest error first)"), use_container_width=True, key="explain")
     st.caption("The autoencoder only learned normal traffic. Features it rebuilds badly are the ones that look least like normal behaviour.")
 
+    gw = int(owners[pick])
+    st.subheader("What does it resemble?")
+    memory = gateway_memory(state["run"], gw, model, dataset)
+    ratio, closest, neighbours = memory.query(test.X[pick : pick + 1])
+    k = st.columns(3)
+    k[0].metric("Closest known traffic", closest[0], f"{(neighbours[0] == closest[0]).sum()} of {memory.k} neighbours", delta_color="off")
+    k[1].metric("Distance to known traffic", f"{ratio[0]:.1f}× usual",
+                help="Mean distance to the 10 nearest known records, divided by the 95th percentile of that distance among known records themselves.")
+    k[2].metric("Triage", "New pattern: escalate" if ratio[0] > 1 else f"Known: {closest[0]}")
+    st.caption(f"Retrieved from **gateway {gw + 1}'s own labelled history** ({len(memory.labels):,} normal and known-attack records) in the autoencoder's "
+               "16-dimensional latent space. The lookup runs on the gateway, so no traffic leaves it. Zero-day classes are never in this memory: "
+               "a zero-day alert can only resemble known traffic, and the distance says how closely.")
+
 
 def page_compare() -> None:
     st.markdown('<div class="eyebrow">Step 3</div>', unsafe_allow_html=True)
@@ -390,7 +415,7 @@ def page_compare() -> None:
     st.caption(f"Source: {source}. Every method ran on the same data split and seed.")
     names = {"centralized": "All data pooled", "local_only": "Each gateway alone", "fedavg": "Federated (FedAvg)", "fedprox": "Federated (FedProx)",
              "secagg_fl": "Federated + secure aggregation", "dp_fl": "Federated + differential privacy", "full_ppfl": "Full privacy (FedAvg)",
-             "full_ppfl_fedprox": "Full privacy (FedProx)"}
+             "full_ppfl_fedprox": "Full privacy (FedProx)", "full_ppfl_tuned": "Full privacy, tuned DP-SGD (ε = 8)"}
     main = df[df.experiment.isin(names)].copy()
     main["Method"] = [names[e] if m == "autoencoder" else f"{m.replace('_', ' ').title()} (pooled)" for e, m in zip(main.experiment, main.model)]
     order = list(names.values())
@@ -438,6 +463,67 @@ def page_compare() -> None:
                                      hovertemplate="%{x}: %{y:.1%}<extra></extra>"))
             col_.plotly_chart(style(f, 260, title=f"Zero-day caught vs {title.lower()}", yaxis=dict(tickformat=".0%", rangemode="tozero"),
                                     xaxis=dict(type="category")), use_container_width=True, key=f"sw_{prefix}")
+
+
+def page_proof() -> None:
+    st.markdown('<div class="eyebrow">Evidence</div>', unsafe_allow_html=True)
+    st.title("Under the hood")
+    st.markdown("Three things you can check here yourself: the secure-aggregation protocol running, the record of every experiment, and the automated tests.")
+
+    st.subheader("1 · Secure aggregation, live")
+    st.caption("Three gateways each hold a model update (4 values shown). Each one adds random masks agreed with the others through "
+               "Diffie–Hellman key exchange. The server receives only masked numbers, yet their sum is exactly the sum of the real updates.")
+    c = st.columns([1, 2])
+    drop = c[1].toggle("Gateway 2 goes offline after the key exchange", help="Its masks are rebuilt from Shamir secret shares held by the others.")
+    if c[0].button("Run the protocol", icon=":material/lock:") or "secagg" not in st.session_state or st.session_state["secagg"][0] != drop:
+        rng = np.random.default_rng()
+        updates = [rng.normal(0, 0.05, 4).round(4) for _ in range(3)]
+        agg = SecureAggregator(0.6, FixedPointEncoder(24))
+        parties = [agg.make_client(i, 4, 3, 0, None) for i in range(3)]
+        for p, u in zip(parties, updates):
+            p.set_input(u, 3)
+        total, stats, server = agg.aggregate(parties, (1,) if drop else ())
+        masked = {m.client_id: m.vector for kind, _, m in server.transcript if kind == "masked_input"}
+        st.session_state["secagg"] = (drop, updates, masked, total, stats)
+    _, updates, masked, total, stats = st.session_state["secagg"]
+    expected = sum(u for i, u in enumerate(updates) if i in masked)
+    rows = []
+    for i, u in enumerate(updates):
+        rows.append({"": f"Gateway {i + 1}: real update (stays private)", **{f"w{j + 1}": f"{v:+.4f}" for j, v in enumerate(u)}})
+        rows.append({"": f"Gateway {i + 1}: what the server receives", **{f"w{j + 1}": (f"{float(v):.4e}" if i in masked else "offline") for j, v in enumerate(masked.get(i, u))}})
+    rows.append({"": "Server's result after unmasking", **{f"w{j + 1}": f"{v:+.4f}" for j, v in enumerate(total)}})
+    rows.append({"": "True sum of the received updates", **{f"w{j + 1}": f"{v:+.4f}" for j, v in enumerate(expected)}})
+    st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
+    st.success(f"Largest difference between the server's result and the true sum: {np.abs(total - expected).max():.1e} "
+               f"(fixed-point rounding, 2⁻²⁴). Threshold {stats.threshold} of 3 gateways · {stats.num_dropped} offline.", icon=":material/check_circle:")
+
+    st.subheader("2 · Every experiment run")
+    runs = sorted(p.parent for p in (ROOT / "results" / "experiments").glob("*/metrics.json"))
+    if runs:
+        reg = []
+        for d in runs:
+            m, env = load_json(d / "metrics.json"), load_json(d / "environment.json") if (d / "environment.json").exists() else {}
+            reg.append({"Experiment": d.name, "Method": m["experiment"]["label"], "Dataset": m["setup"]["dataset"],
+                        "Finished (UTC)": m["experiment"].get("finished_utc", "")[:16].replace("T", " "),
+                        "Runtime": f"{m['timing']['total_time_s'] / 60:.1f} min", "Zero-day caught": pct(m["models"]["autoencoder"]["summary"]["unseen_recall"]),
+                        "Code version": (env.get("git_commit") or "")[:7], "Config fingerprint": m["experiment"]["config_fingerprint"]})
+        st.dataframe(pd.DataFrame(reg), hide_index=True, use_container_width=True)
+        st.caption(f"{len(reg)} runs in `results/experiments/`. Each folder holds the exact `config.yaml`, per-round `metrics.csv`, final `metrics.json`, "
+                   "logs, hardware and package versions (`environment.json`) and the trained model.")
+    else:
+        st.info("No experiment suite yet. Run `python scripts/run_experiments.py --suite all`.")
+
+    st.subheader("3 · Automated tests")
+    st.caption("The tests check, among others, that secure-aggregation masks cancel exactly, that dropped gateways are recovered, that DP-SGD clips "
+               "and noises every gradient, that DP gateways release no un-noised value, that zero-day classes never reach training, "
+               "and that two runs with the same seed give identical results.")
+    if st.button("Run the test suite", icon=":material/science:"):
+        with st.spinner("Running pytest (about a minute)…"):
+            r = subprocess.run([sys.executable, "-m", "pytest", "-q", "-p", "no:warnings", "-p", "no:cacheprovider"], cwd=ROOT, capture_output=True, text=True)
+        lines = r.stdout.strip().splitlines()
+        (st.success if r.returncode == 0 else st.error)(lines[-1] if lines else r.stderr[-500:])
+        with st.expander("Full output"):
+            st.code(r.stdout[-6000:] or r.stderr[-6000:])
 
 
 # ----------------------------------------------------------------------------- figures
@@ -550,6 +636,7 @@ def main() -> None:
         st.Page(page_train, title="Train live", icon=":material/model_training:", url_path="train"),
         st.Page(page_detect, title="Detect attacks", icon=":material/radar:", url_path="detect"),
         st.Page(page_compare, title="Compare results", icon=":material/bar_chart:", url_path="compare"),
+        st.Page(page_proof, title="Under the hood", icon=":material/verified:", url_path="proof"),
     ])
     with st.sidebar:
         st.markdown("### IoT Zero-Day Defense")

@@ -17,7 +17,7 @@ def page(name: str) -> AppTest:
     return AppTest.from_string(PRE + f"app.page_{name}()", default_timeout=600)
 
 
-@pytest.mark.parametrize("name", ["overview", "train", "detect", "compare"])
+@pytest.mark.parametrize("name", ["overview", "train", "detect", "compare", "proof"])
 def test_page_renders(name):
     at = page(name).run()
     assert not at.exception, [e.message for e in at.exception]

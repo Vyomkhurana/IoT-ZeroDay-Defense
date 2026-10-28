@@ -106,3 +106,14 @@ def test_validation_f1_falls_back_without_attacks():
     sel = ThresholdSelector(DetectionConfig(threshold_strategy="validation_f1"))
     res = sel.from_scores(np.linspace(0, 1, 100), np.array([]))
     assert res.strategy == "percentile"
+
+
+def test_gateway_memory_tells_known_from_new_patterns():
+    from ppfl.detection.retrieval import GatewayMemory
+
+    rng = np.random.default_rng(0)
+    X = np.concatenate([rng.normal(0, 1, (300, 4)), rng.normal(10, 1, (300, 4))])
+    memory = GatewayMemory(lambda x: x, X, np.array(["benign"] * 300 + ["scan"] * 300))
+    ratio, closest, _ = memory.query(np.array([[10.0, 10, 10, 10], [50.0, -50, 50, -50]]))
+    assert closest[0] == "scan" and ratio[0] <= 1  # variant of known traffic
+    assert ratio[1] > 1  # far from everything the gateway has seen
