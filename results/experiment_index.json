@@ -1,0 +1,38 @@
+{
+  "scalability": [
+    "ppfl_clients_3",
+    "ppfl_clients_5",
+    "ppfl_clients_10",
+    "ppfl_clients_20"
+  ],
+  "local_epochs": [
+    "ppfl_local_epochs_1",
+    "ppfl_local_epochs_2",
+    "ppfl_local_epochs_5"
+  ],
+  "main": [
+    "centralized",
+    "local_only",
+    "fedavg",
+    "fedprox",
+    "dp_fl",
+    "secagg_fl",
+    "full_ppfl",
+    "full_ppfl_fedprox",
+    "full_ppfl_tuned"
+  ],
+  "privacy": [
+    "ppfl_sigma_0.4",
+    "ppfl_sigma_0.6",
+    "ppfl_sigma_0.8",
+    "ppfl_sigma_1.0",
+    "ppfl_sigma_1.5",
+    "ppfl_sigma_2.5"
+  ],
+  "heterogeneity": [
+    "fedavg_alpha_0.1",
+    "fedavg_alpha_0.3",
+    "fedavg_alpha_1.0",
+    "fedavg_alpha_10.0"
+  ]
+}

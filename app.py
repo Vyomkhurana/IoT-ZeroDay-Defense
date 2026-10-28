@@ -52,6 +52,7 @@ DATASETS = {"nbaiot": "N-BaIoT (real IoT botnet traffic)", "synthetic": "Synthet
 GROUPS = {"benign": "Normal traffic", "known_attack": "Known attacks", "unseen_attack": "Zero-day attacks"}
 COLORS = {"benign": "#2a78d6", "known_attack": "#eb6834", "unseen_attack": "#1baf7a"}
 ALERT = "#d03b3b"
+MODEL_NAMES = {"autoencoder": "Autoencoder", "isolation_forest": "Isolation Forest", "one_class_svm": "One-Class SVM"}
 
 # ----------------------------------------------------------------------------- helpers
 
@@ -128,13 +129,15 @@ def gateway_memory(run_dir: str, gateway: int, _model, _dataset) -> GatewayMemor
 
 
 def finished_runs() -> list[Path]:
-    runs = [p.parent for p in (ROOT / UI_RUNS).glob("*/*/metrics.json") if (p.parent / "model" / "autoencoder.pt").exists()]
-    return sorted(runs, key=lambda p: (p / "metrics.json").stat().st_mtime, reverse=True)
+    """Dashboard runs and experiment-suite runs with a saved model; real data first, newest first."""
+    found = [*(ROOT / UI_RUNS).glob("*/*/metrics.json"), *(ROOT / "results" / "experiments").glob("*/metrics.json")]
+    runs = [p.parent for p in found if (p.parent / "model" / "autoencoder.pt").exists()]
+    return sorted(runs, key=lambda p: (load_json(p / "metrics.json")["experiment"].get("synthetic_data", False), -(p / "metrics.json").stat().st_mtime))
 
 
 def run_label(d: Path) -> str:
     m = load_json(d / "metrics.json")
-    return f"{m['experiment']['label']} · {DATASETS.get(m['setup']['dataset'], m['setup']['dataset']).split(' (')[0]} · {m['experiment']['finished_utc'][:16].replace('T', ' ')} UTC"
+    return f"{m['experiment']['label']} [{d.name}] · {DATASETS.get(m['setup']['dataset'], m['setup']['dataset']).split(' (')[0]} · {m['experiment']['finished_utc'][:16].replace('T', ' ')} UTC"
 
 
 # ----------------------------------------------------------------------------- pages
@@ -171,7 +174,7 @@ G1 -> S [label=" 2. train · 3. clip + noise · 4. mask" style=dashed color="#eb
         st.subheader("Zero-day attacks caught")
         st.caption(f"Share of never-seen attack traffic flagged, at about 5% false alarms. From the finished experiment suite ({source}).")
         row = lambda e: df[(df.experiment == e) & (df.model == "autoencoder")].iloc[0] if ((df.experiment == e) & (df.model == "autoencoder")).any() else None  # noqa: E731
-        heads = [("centralized", "All data pooled"), ("fedavg", "Federated"), ("secagg_fl", "Federated + SecAgg"), ("full_ppfl", "Full privacy"),
+        heads = [("centralized", "All data pooled"), ("fedavg", "Federated"), ("secagg_fl", "With SecAgg"), ("full_ppfl", "Full privacy"),
                  ("full_ppfl_tuned", "Full privacy, tuned")]
         cols = st.columns(len(heads))
         for col, (exp, name) in zip(cols, heads):
@@ -308,7 +311,7 @@ def show_results(run_dir: Path) -> None:
             st.dataframe(show, hide_index=True, use_container_width=True)
     if "isolation_forest" in m["models"]:
         with st.expander("Classical baselines trained on the same pooled data"):
-            st.dataframe(pd.DataFrame([{"Model": n.replace("_", " ").title(), "Zero-day caught": pct(v["summary"]["unseen_recall"]),
+            st.dataframe(pd.DataFrame([{"Model": MODEL_NAMES.get(n, n), "Zero-day caught": pct(v["summary"]["unseen_recall"]),
                                         "False alarms": pct(v["summary"]["fpr"]), "F1": round(v["summary"]["f1"], 3), "ROC-AUC": round(v["summary"]["roc_auc"], 3)}
                                        for n, v in m["models"].items()]), hide_index=True, use_container_width=True)
 
@@ -395,7 +398,7 @@ def explain(model, thr, dataset, test, owners, state) -> None:
     memory = gateway_memory(state["run"], gw, model, dataset)
     ratio, closest, neighbours = memory.query(test.X[pick : pick + 1])
     k = st.columns(3)
-    k[0].metric("Closest known traffic", closest[0], f"{(neighbours[0] == closest[0]).sum()} of {memory.k} neighbours", delta_color="off")
+    k[0].metric(f"Closest known traffic ({(neighbours[0] == closest[0]).sum()} of {memory.k} neighbours)", closest[0])
     k[1].metric("Distance to known traffic", f"{ratio[0]:.1f}× usual",
                 help="Mean distance to the 10 nearest known records, divided by the 95th percentile of that distance among known records themselves.")
     k[2].metric("Triage", "New pattern: escalate" if ratio[0] > 1 else f"Known: {closest[0]}")
@@ -417,9 +420,9 @@ def page_compare() -> None:
              "secagg_fl": "Federated + secure aggregation", "dp_fl": "Federated + differential privacy", "full_ppfl": "Full privacy (FedAvg)",
              "full_ppfl_fedprox": "Full privacy (FedProx)", "full_ppfl_tuned": "Full privacy, tuned DP-SGD (ε = 8)"}
     main = df[df.experiment.isin(names)].copy()
-    main["Method"] = [names[e] if m == "autoencoder" else f"{m.replace('_', ' ').title()} (pooled)" for e, m in zip(main.experiment, main.model)]
+    main["Method"] = [names[e] if m == "autoencoder" else f"{MODEL_NAMES.get(m, m)} (pooled)" for e, m in zip(main.experiment, main.model)]
     order = list(names.values())
-    main["_o"] = [order.index(x) if x in order else -1 for x in main.Method]
+    main["_o"] = [order.index(x) if x in order else len(order) for x in main.Method]  # pooled baselines last
     main = main.sort_values("_o")
     metric = st.segmented_control("Metric", ["Zero-day caught", "F1", "ROC-AUC", "False alarms"], default="Zero-day caught")
     col = {"Zero-day caught": "unseen_recall", "F1": "f1", "ROC-AUC": "roc_auc", "False alarms": "fpr"}[metric or "Zero-day caught"]
@@ -435,8 +438,8 @@ def page_compare() -> None:
     table = pd.DataFrame({"Method": main.Method, "Zero-day caught": main.unseen_recall.map(pct), "Known caught": main.known_recall.map(pct),
                           "False alarms": main.fpr.map(pct), "F1": main.f1.round(3), "ROC-AUC": main.roc_auc.round(3),
                           "Privacy ε": main.epsilon.map(lambda v: "–" if pd.isna(v) else f"{v:.1f}"),
-                          "Data sent": main.total_mb.map(lambda v: "–" if pd.isna(v) else f"{v:.1f} MB")})
-    st.dataframe(table, hide_index=True, use_container_width=True)
+                          "Data sent": main.total_mb.map(lambda v: "–" if pd.isna(v) else "none" if v == 0 else f"{v:.1f} MB")})
+    st.dataframe(table, hide_index=True, use_container_width=True, height=36 * (len(table) + 1) + 3)
 
     st.subheader("The cost of privacy")
     sweep = df[df.experiment.str.startswith("ppfl_sigma_")].sort_values("epsilon")
@@ -453,15 +456,15 @@ def page_compare() -> None:
         style(fig, 380, title="Full privacy at different noise levels σ (left = more private)",
               xaxis=dict(type="log", tickvals=[2, 5, 10, 20, 50, 100], title="privacy budget ε (log scale)"), yaxis=dict(rangemode="tozero"))
         st.plotly_chart(fig, use_container_width=True, key="tradeoff")
-    sweeps = {"ppfl_clients_": ("Number of gateways", "num_clients"), "fedavg_alpha_": ("Data similarity α", "dirichlet_alpha"),
-              "ppfl_local_epochs_": ("Local epochs per round", "local_epochs")}
+    sweeps = {"ppfl_clients_": ("Gateways", "num_clients"), "fedavg_alpha_": ("Data similarity α", "dirichlet_alpha"),
+              "ppfl_local_epochs_": ("Local epochs", "local_epochs")}
     cols = st.columns(3)
     for col_, (prefix, (title, x)) in zip(cols, sweeps.items()):
         sw = df[df.experiment.str.startswith(prefix)].sort_values(x)
         if len(sw):
-            f = go.Figure(go.Scatter(x=sw[x].astype(str), y=sw.unseen_recall, mode="lines+markers", line=dict(color="#1baf7a", width=2), marker=dict(size=8),
+            f = go.Figure(go.Scatter(x=sw[x].map(lambda v: f"{v:g}"), y=sw.unseen_recall, mode="lines+markers", line=dict(color="#1baf7a", width=2), marker=dict(size=8),
                                      hovertemplate="%{x}: %{y:.1%}<extra></extra>"))
-            col_.plotly_chart(style(f, 260, title=f"Zero-day caught vs {title.lower()}", yaxis=dict(tickformat=".0%", rangemode="tozero"),
+            col_.plotly_chart(style(f, 260, title=f"Zero-day caught vs {title[0].lower() + title[1:]}", yaxis=dict(tickformat=".0%", rangemode="tozero"),
                                     xaxis=dict(type="category")), use_container_width=True, key=f"sw_{prefix}")
 
 

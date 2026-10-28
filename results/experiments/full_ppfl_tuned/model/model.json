@@ -1,0 +1,22 @@
+{
+  "architecture": {
+    "input_dim": 115,
+    "hidden_dims": [
+      64,
+      32
+    ],
+    "latent_dim": 16,
+    "num_parameters": 20163
+  },
+  "threshold": {
+    "value": 0.35284752608906966,
+    "strategy": "percentile",
+    "n_benign": 25895.0,
+    "n_attack": 26999.0,
+    "method": "histogram",
+    "bins": 4096,
+    "percentile": 95.0,
+    "histogram_dp_epsilon": null,
+    "secure_aggregation": true
+  }
+}

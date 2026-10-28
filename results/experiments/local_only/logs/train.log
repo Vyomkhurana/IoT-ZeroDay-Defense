@@ -1,0 +1,26 @@
+2026-10-28 21:56:17,295 | INFO    | ppfl.experiments.runner | === Experiment 'local_only' (Local-only) | dataset=nbaiot | device=cpu | seed=42 ===
+2026-10-28 21:56:17,658 | INFO    | ppfl.data.zero_day | Zero-day split: known attacks=['gafgyt_combo', 'gafgyt_junk', 'gafgyt_scan', 'gafgyt_tcp', 'gafgyt_udp'] | unseen (held-out) attacks=['mirai_ack', 'mirai_scan', 'mirai_syn', 'mirai_udp', 'mirai_udpplain']
+2026-10-28 21:56:21,216 | INFO    | ppfl.data.federated_dataset | client_0: train=15143 (benign=5622) val=3786 test=6310 zero_day=13642 devices=9
+2026-10-28 21:56:21,222 | INFO    | ppfl.data.federated_dataset | client_1: train=33742 (benign=20616) val=8436 test=14060 zero_day=14488 devices=9
+2026-10-28 21:56:21,225 | INFO    | ppfl.data.federated_dataset | client_2: train=13513 (benign=5277) val=3378 test=5630 zero_day=13819 devices=9
+2026-10-28 21:56:21,229 | INFO    | ppfl.data.federated_dataset | client_3: train=21461 (benign=10557) val=5365 test=8943 zero_day=16824 devices=9
+2026-10-28 21:56:21,233 | INFO    | ppfl.data.federated_dataset | client_4: train=23995 (benign=13381) val=5999 test=9998 zero_day=16695 devices=9
+2026-10-28 21:56:21,238 | INFO    | ppfl.data.federated_dataset | client_5: train=30212 (benign=19026) val=7553 test=12590 zero_day=12576 devices=9
+2026-10-28 21:56:21,241 | INFO    | ppfl.data.federated_dataset | client_6: train=16119 (benign=6011) val=4030 test=6715 zero_day=9966 devices=9
+2026-10-28 21:56:21,245 | INFO    | ppfl.data.federated_dataset | client_7: train=22839 (benign=11733) val=5709 test=9516 zero_day=12404 devices=9
+2026-10-28 21:56:21,249 | INFO    | ppfl.data.federated_dataset | client_8: train=18908 (benign=6829) val=4726 test=7880 zero_day=12876 devices=9
+2026-10-28 21:56:21,252 | INFO    | ppfl.data.federated_dataset | client_9: train=15652 (benign=4532) val=3912 test=6521 zero_day=16710 devices=9
+2026-10-28 21:56:21,252 | INFO    | ppfl.data.federated_dataset | Partition strategy=dirichlet alpha=0.5 heterogeneity (mean JS distance)=0.174
+2026-10-28 21:56:25,156 | INFO    | ppfl.experiments.local | client_0 local model: global F1 0.9194 | unseen recall 0.9792 | own-test F1 0.9382
+2026-10-28 21:56:37,670 | INFO    | ppfl.experiments.local | client_1 local model: global F1 0.9898 | unseen recall 0.9962 | own-test F1 0.9852
+2026-10-28 21:56:41,307 | INFO    | ppfl.experiments.local | client_2 local model: global F1 0.8768 | unseen recall 0.8951 | own-test F1 0.9088
+2026-10-28 21:56:47,798 | INFO    | ppfl.experiments.local | client_3 local model: global F1 0.9832 | unseen recall 0.9943 | own-test F1 0.9929
+2026-10-28 21:56:55,871 | INFO    | ppfl.experiments.local | client_4 local model: global F1 0.9869 | unseen recall 0.9946 | own-test F1 0.9910
+2026-10-28 21:57:07,927 | INFO    | ppfl.experiments.local | client_5 local model: global F1 0.9881 | unseen recall 0.9985 | own-test F1 0.9856
+2026-10-28 21:57:12,146 | INFO    | ppfl.experiments.local | client_6 local model: global F1 0.9131 | unseen recall 0.9731 | own-test F1 0.9191
+2026-10-28 21:57:18,910 | INFO    | ppfl.experiments.local | client_7 local model: global F1 0.9885 | unseen recall 0.9922 | own-test F1 0.9898
+2026-10-28 21:57:23,515 | INFO    | ppfl.experiments.local | client_8 local model: global F1 0.9119 | unseen recall 0.9693 | own-test F1 0.8921
+2026-10-28 21:57:26,629 | INFO    | ppfl.experiments.local | client_9 local model: global F1 0.7864 | unseen recall 0.7368 | own-test F1 0.8156
+2026-10-28 21:57:27,862 | INFO    | ppfl.visualization.plots | Wrote 2 figures to C:\Users\user\OneDrive\Desktop\ML_PROJECT\IoT-ZeroDay-Defense\results\experiments\local_only\figures
+2026-10-28 21:57:27,863 | INFO    | ppfl.experiments.runner | RESULT local_only | F1 0.9344 | precision 0.9809 | recall 0.8991 | FPR 0.0758 | UNSEEN-ATTACK RECALL 0.9529 | AUC 0.9674 | 69.3s
+2026-10-28 21:57:27,863 | INFO    | ppfl.experiments.runner | Artefacts written to C:\Users\user\OneDrive\Desktop\ML_PROJECT\IoT-ZeroDay-Defense\results\experiments\local_only (finished 2026-10-28T16:27:27+00:00)

@@ -1,0 +1,38 @@
+2026-10-28 22:47:47,335 | INFO    | ppfl.experiments.runner | === Experiment 'fedavg_alpha_10.0' (Plain FL (FedAvg)) | dataset=nbaiot | device=cpu | seed=42 ===
+2026-10-28 22:47:47,711 | INFO    | ppfl.data.zero_day | Zero-day split: known attacks=['gafgyt_combo', 'gafgyt_junk', 'gafgyt_scan', 'gafgyt_tcp', 'gafgyt_udp'] | unseen (held-out) attacks=['mirai_ack', 'mirai_scan', 'mirai_syn', 'mirai_udp', 'mirai_udpplain']
+2026-10-28 22:47:50,913 | INFO    | ppfl.data.federated_dataset | client_0: train=22918 (benign=12298) val=5729 test=9548 zero_day=14413 devices=9
+2026-10-28 22:47:50,919 | INFO    | ppfl.data.federated_dataset | client_1: train=22632 (benign=12314) val=5658 test=9428 zero_day=13537 devices=9
+2026-10-28 22:47:50,925 | INFO    | ppfl.data.federated_dataset | client_2: train=19758 (benign=9334) val=4940 test=8233 zero_day=14189 devices=9
+2026-10-28 22:47:50,932 | INFO    | ppfl.data.federated_dataset | client_3: train=19128 (benign=8206) val=4782 test=7971 zero_day=13041 devices=9
+2026-10-28 22:47:50,937 | INFO    | ppfl.data.federated_dataset | client_4: train=21032 (benign=10035) val=5258 test=8764 zero_day=13804 devices=9
+2026-10-28 22:47:50,943 | INFO    | ppfl.data.federated_dataset | client_5: train=21002 (benign=10283) val=5251 test=8751 zero_day=13325 devices=9
+2026-10-28 22:47:50,948 | INFO    | ppfl.data.federated_dataset | client_6: train=18908 (benign=9528) val=4726 test=7878 zero_day=13846 devices=9
+2026-10-28 22:47:50,953 | INFO    | ppfl.data.federated_dataset | client_7: train=22004 (benign=11102) val=5500 test=9168 zero_day=14087 devices=9
+2026-10-28 22:47:50,959 | INFO    | ppfl.data.federated_dataset | client_8: train=20348 (benign=9158) val=5089 test=8479 zero_day=13669 devices=9
+2026-10-28 22:47:50,965 | INFO    | ppfl.data.federated_dataset | client_9: train=23853 (benign=11326) val=5964 test=9941 zero_day=16089 devices=9
+2026-10-28 22:47:50,966 | INFO    | ppfl.data.federated_dataset | Partition strategy=dirichlet alpha=10 heterogeneity (mean JS distance)=0.040
+2026-10-28 22:47:51,106 | INFO    | ppfl.experiments.federated | Federated training: 10 clients, 20 rounds x 2 local epochs, strategy=fedavg, DP=False, SecAgg=False
+2026-10-28 22:47:57,836 | INFO    | ppfl.experiments.federated | round   1 | train 0.49247 | val 0.48113 | F1 0.5738 | unseen recall 0.5362 | FPR 0.0508 | 1583.4 KB
+2026-10-28 22:48:04,639 | INFO    | ppfl.experiments.federated | round   2 | train 0.28338 | val 0.24066 | F1 0.7669 | unseen recall 0.7132 | FPR 0.0518 | 1583.4 KB
+2026-10-28 22:48:12,058 | INFO    | ppfl.experiments.federated | round   3 | train 0.19304 | val 0.16640 | F1 0.8028 | unseen recall 0.7492 | FPR 0.0509 | 1583.4 KB
+2026-10-28 22:48:18,613 | INFO    | ppfl.experiments.federated | round   4 | train 0.14791 | val 0.13012 | F1 0.8226 | unseen recall 0.7856 | FPR 0.0513 | 1583.4 KB
+2026-10-28 22:48:24,953 | INFO    | ppfl.experiments.federated | round   5 | train 0.12298 | val 0.10877 | F1 0.8730 | unseen recall 0.8851 | FPR 0.0508 | 1583.4 KB
+2026-10-28 22:48:32,051 | INFO    | ppfl.experiments.federated | round   6 | train 0.10640 | val 0.09443 | F1 0.9032 | unseen recall 0.9477 | FPR 0.0507 | 1583.4 KB
+2026-10-28 22:48:38,490 | INFO    | ppfl.experiments.federated | round   7 | train 0.09424 | val 0.08390 | F1 0.9183 | unseen recall 0.9747 | FPR 0.0503 | 1583.4 KB
+2026-10-28 22:48:45,309 | INFO    | ppfl.experiments.federated | round   8 | train 0.08673 | val 0.07659 | F1 0.9310 | unseen recall 0.9912 | FPR 0.0503 | 1583.4 KB
+2026-10-28 22:48:52,175 | INFO    | ppfl.experiments.federated | round   9 | train 0.08062 | val 0.07103 | F1 0.9903 | unseen recall 0.9943 | FPR 0.0508 | 1583.4 KB
+2026-10-28 22:48:58,316 | INFO    | ppfl.experiments.federated | round  10 | train 0.07650 | val 0.06670 | F1 0.9907 | unseen recall 0.9948 | FPR 0.0510 | 1583.4 KB
+2026-10-28 22:49:04,365 | INFO    | ppfl.experiments.federated | round  11 | train 0.07195 | val 0.06353 | F1 0.9910 | unseen recall 0.9954 | FPR 0.0515 | 1583.4 KB
+2026-10-28 22:49:10,046 | INFO    | ppfl.experiments.federated | round  12 | train 0.06904 | val 0.06038 | F1 0.9912 | unseen recall 0.9958 | FPR 0.0506 | 1583.4 KB
+2026-10-28 22:49:16,003 | INFO    | ppfl.experiments.federated | round  13 | train 0.06598 | val 0.05811 | F1 0.9914 | unseen recall 0.9961 | FPR 0.0505 | 1583.4 KB
+2026-10-28 22:49:22,059 | INFO    | ppfl.experiments.federated | round  14 | train 0.06365 | val 0.05606 | F1 0.9915 | unseen recall 0.9965 | FPR 0.0508 | 1583.4 KB
+2026-10-28 22:49:28,821 | INFO    | ppfl.experiments.federated | round  15 | train 0.06183 | val 0.05438 | F1 0.9916 | unseen recall 0.9967 | FPR 0.0508 | 1583.4 KB
+2026-10-28 22:49:35,618 | INFO    | ppfl.experiments.federated | round  16 | train 0.05967 | val 0.05240 | F1 0.9918 | unseen recall 0.9969 | FPR 0.0503 | 1583.4 KB
+2026-10-28 22:49:42,809 | INFO    | ppfl.experiments.federated | round  17 | train 0.05875 | val 0.05112 | F1 0.9919 | unseen recall 0.9970 | FPR 0.0507 | 1583.4 KB
+2026-10-28 22:49:49,453 | INFO    | ppfl.experiments.federated | round  18 | train 0.05768 | val 0.04985 | F1 0.9920 | unseen recall 0.9971 | FPR 0.0503 | 1583.4 KB
+2026-10-28 22:49:56,455 | INFO    | ppfl.experiments.federated | round  19 | train 0.05590 | val 0.04839 | F1 0.9921 | unseen recall 0.9974 | FPR 0.0503 | 1583.4 KB
+2026-10-28 22:50:02,890 | INFO    | ppfl.experiments.federated | round  20 | train 0.05409 | val 0.04717 | F1 0.9924 | unseen recall 0.9976 | FPR 0.0501 | 1583.4 KB
+2026-10-28 22:50:04,128 | INFO    | ppfl.experiments.federated | Federated threshold (percentile, histogram): 0.157725
+2026-10-28 22:50:10,164 | INFO    | ppfl.visualization.plots | Wrote 11 figures to C:\Users\user\OneDrive\Desktop\ML_PROJECT\IoT-ZeroDay-Defense\results\experiments\fedavg_alpha_10.0\figures
+2026-10-28 22:50:10,164 | INFO    | ppfl.experiments.runner | RESULT fedavg_alpha_10.0 | F1 0.9924 | precision 0.9884 | recall 0.9964 | FPR 0.0501 | UNSEEN-ATTACK RECALL 0.9976 | AUC 0.9883 | 136.7s
+2026-10-28 22:50:10,164 | INFO    | ppfl.experiments.runner | Artefacts written to C:\Users\user\OneDrive\Desktop\ML_PROJECT\IoT-ZeroDay-Defense\results\experiments\fedavg_alpha_10.0 (finished 2026-10-28T17:20:10+00:00)

@@ -1,0 +1,27 @@
+{
+  "python": "3.13.5",
+  "platform": "Windows-11-10.0.26100-SP0",
+  "processor": "AMD64 Family 25 Model 68 Stepping 1, AuthenticAMD",
+  "cpu_count": 16,
+  "torch_threads": 4,
+  "cuda_available": false,
+  "torch_cuda_version": null,
+  "packages": {
+    "numpy": "2.1.3",
+    "pandas": "2.2.3",
+    "scikit-learn": "1.6.1",
+    "scipy": "1.15.3",
+    "torch": "2.11.0",
+    "opacus": "1.6.0",
+    "matplotlib": "3.10.0",
+    "seaborn": "0.13.2",
+    "PyYAML": "6.0.2",
+    "pyarrow": "19.0.0",
+    "flwr": null
+  },
+  "git_commit": "07512e9841a327855b3e02c7c7cba848f309adcf",
+  "ram_gb": 23.7,
+  "seed": 42,
+  "config_fingerprint": "a83ad69e9662",
+  "started_utc": "2026-10-05T17:21:05.708564+00:00"
+}

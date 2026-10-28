@@ -366,7 +366,7 @@ def plot_recall_vs_noise(df: pd.DataFrame, out: Path, synthetic: bool) -> Path |
     ax.set(title="Zero-day recall vs privacy level", xlabel="Noise multiplier σ", ylabel="Rate", ylim=(0, 1.05))
     h1, l1 = ax.get_legend_handles_labels()
     h2, l2 = ax2.get_legend_handles_labels()
-    ax.legend(h1 + h2, l1 + l2, loc="center right")
+    ax.legend(h1 + h2, l1 + l2, loc="upper right")
     return _save(fig, out, "zero_day_recall_vs_privacy", synthetic)
 
 

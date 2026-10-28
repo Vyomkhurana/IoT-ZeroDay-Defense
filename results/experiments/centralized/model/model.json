@@ -1,0 +1,19 @@
+{
+  "architecture": {
+    "input_dim": 115,
+    "hidden_dims": [
+      64,
+      32
+    ],
+    "latent_dim": 16,
+    "num_parameters": 20163
+  },
+  "threshold": {
+    "value": 0.09805045649409291,
+    "strategy": "percentile",
+    "n_benign": 25895,
+    "n_attack": 26999,
+    "method": "exact",
+    "percentile": 95.0
+  }
+}

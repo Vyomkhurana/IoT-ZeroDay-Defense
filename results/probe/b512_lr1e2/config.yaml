@@ -1,0 +1,118 @@
+experiment:
+  name: b512_lr1e2
+  description: Full privacy-preserving FL (FedAvg + local DP-SGD + secure aggregation).
+  seed: 42
+  output_dir: results/probe
+  device: auto
+  deterministic: true
+  num_threads: 4
+data:
+  dataset: nbaiot
+  raw_dir: null
+  processed_dir: data/processed
+  benign_label: benign
+  holdout_classes:
+  - mirai_*
+  val_fraction: 0.15
+  test_fraction: 0.25
+  scaler: standard
+  log_transform: false
+  clip_value: null
+  train_contamination: 0.0
+  max_samples_per_group: 4000
+  max_benign_samples_per_group: 20000
+  max_missing_fraction: 0.5
+  loader_options: {}
+  synthetic:
+    num_devices: 6
+    benign_per_device: 4000
+    attacks_per_device_class: 500
+    attack_classes:
+    - scan
+    - syn_flood
+    - ack_flood
+    - udp_flood
+    - http_flood
+    - c2_beacon
+    attack_coverage: 0.85
+    attack_strength: 1.0
+    num_time_windows: 5
+    corrupt_fraction: 0.001
+partition:
+  num_clients: 10
+  strategy: dirichlet
+  dirichlet_alpha: 0.5
+  stratify_by:
+  - device
+  - label
+  min_benign_per_client: 200
+  max_retries: 200
+model:
+  type: autoencoder
+  hidden_dims:
+  - 64
+  - 32
+  latent_dim: 16
+  activation: relu
+  dropout: 0.0
+training:
+  mode: federated
+  epochs: 20
+  batch_size: 512
+  learning_rate: 0.01
+  optimizer: adam
+  momentum: 0.9
+  weight_decay: 0.0
+  grad_clip_norm: null
+federated:
+  strategy: fedavg
+  rounds: 20
+  local_epochs: 2
+  fraction_fit: 1.0
+  min_fit_clients: 2
+  mu: 0.01
+  server_learning_rate: 1.0
+  eval_every: 1
+privacy:
+  enabled: true
+  noise_multiplier: 1.0
+  max_grad_norm: 1.0
+  delta: 1.0e-05
+  target_epsilon: 8.0
+  accountant: rdp
+  poisson_sampling: true
+  secure_mode: false
+secure_aggregation:
+  enabled: true
+  threshold_fraction: 0.6
+  dropout_rate: 0.0
+  fractional_bits: 24
+  deterministic: false
+detection:
+  threshold_strategy: percentile
+  percentile: 95.0
+  std_factor: 3.0
+  histogram_bins: 4096
+  histogram_min: 1.0e-08
+  histogram_max: 1000000.0
+  histogram_dp_epsilon: null
+baselines:
+  isolation_forest:
+    enabled: true
+    n_estimators: 200
+    max_samples: auto
+    max_train_samples: 50000
+  one_class_svm:
+    enabled: true
+    kernel: rbf
+    nu: 0.05
+    gamma: scale
+    max_train_samples: 5000
+evaluation:
+  batch_size: 4096
+  per_client: true
+  save_scores: true
+  max_saved_scores: 50000
+  make_figures: false
+logging:
+  level: INFO

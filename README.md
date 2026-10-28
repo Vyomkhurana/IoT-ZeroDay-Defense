@@ -198,7 +198,15 @@ Our faculty suggested adding a RAG (retrieval-augmented generation) system. We c
 
 **Retrieval itself does fit, applied to traffic.** When the detector raises an alert, the gateway looks up the 10 most similar records in **its own labelled history** (normal traffic and known attacks; zero-day classes are never in it) in the autoencoder's 16-dimensional latent space (`src/ppfl/detection/retrieval.py`). The majority label says what the alert resembles. The distance, relative to how far known records usually are from each other, says whether it is a variant of known traffic (auto-label it) or a new pattern (escalate it to an analyst). Everything runs on the gateway, so no traffic leaves it. The dashboard shows this for every alert under **Detect attacks → What does it resemble?**
 
-TRIAGE_TABLE
+Measured on every alert the FedAvg model raises on the N-BaIoT test set (`results/experiments/fedavg/evaluation/evaluation.json`):
+
+| Alert type | Alerts | Judged "new pattern" | Median distance vs usual | Most frequent closest known traffic |
+|---|---|---|---|---|
+| Known attacks (Gafgyt) | 44,869 | 0.4% | 0.01× | gafgyt_tcp, gafgyt_junk, gafgyt_scan (own family) |
+| **Zero-day attacks (Mirai)** | 139,687 | **60.1%** | 2.44× | benign, gafgyt_scan, gafgyt_combo |
+| False alarms (normal traffic) | 2,248 | 79.7% | 2.25× | benign |
+
+Alerts on known attacks are matched to their own attack family almost always (99.6%), so they can be labelled automatically. 60% of zero-day alerts are recognised as new patterns and escalated. The rest resemble a known attack: `mirai_scan`, for example, retrieves `gafgyt_scan`, which is the right family of behaviour. The limitation: retrieval cannot tell a false alarm from a novel attack, since both are far from everything known, so 80% of false alarms are escalated too. Known-attack test records come from the same capture as the gateway's history, which makes them match very closely.
 
 Reproduce with `python scripts/evaluate.py --experiment fedavg --triage`. Retrieval doesn't flag anything new; it explains alerts the autoencoder has already raised.
 
@@ -229,15 +237,73 @@ Defaults (`configs/default.yaml`): 10 clients, Dirichlet α = 0.5, 20 rounds × 
 
 ## Results
 
-Measured on **N-BaIoT** (492,641 records from 9 real IoT devices, 115 features). 10 gateways, Dirichlet α = 0.5, 20 rounds × 2 local epochs, seed 42. The whole **Mirai** botnet family (5 attack types) is held out as the zero-day attacks, and the threshold is the 95th percentile of normal validation traffic, so about 5% false alarms.
+Every number below is measured on **N-BaIoT** (492,641 records from 9 real IoT devices, 115 features) and read from `results/summary.csv`. Setup: 10 gateways, Dirichlet α = 0.5, 20 rounds × 2 local epochs, seed 42. The whole **Mirai** botnet family (5 attack types) is held out as the zero-day attacks. The threshold is the 95th percentile of normal validation traffic, so about 5% false alarms. The full report is `results/report.md`, the comparison figures are in `results/figures/`, and each run's config, per-round metrics, logs and environment are in `results/experiments/<name>/`.
 
-| Method | Zero-day caught | Known attacks caught | F1 | ROC-AUC | False alarms | Privacy ε |
+### Main comparison
+
+| Method | Zero-day caught | Known caught | F1 | ROC-AUC | False alarms | Privacy ε | Data sent |
+|---|---|---|---|---|---|---|---|
+| All data pooled (centralized autoencoder) | 99.9% | 99.9% | 0.994 | 0.993 | 5.2% | – | 116.0 MiB |
+| Isolation Forest, pooled | 59.4% | 0.3% | 0.616 | 0.942 | 5.0% | – | – |
+| One-Class SVM, pooled | 80.4% | 45.9% | 0.832 | 0.958 | 5.0% | – | – |
+| Each gateway alone (no collaboration) | 95.3% | 73.2% | 0.934 | 0.967 | 7.6% | – | none |
+| Federated (FedAvg) | 99.8% | 99.7% | 0.993 | 0.989 | 5.2% | – | 32.0 MiB |
+| Federated (FedProx) | 99.5% | 99.0% | 0.991 | 0.986 | 5.2% | – | 32.0 MiB |
+| Federated + secure aggregation | 99.8% | 99.6% | 0.993 | 0.989 | 5.2% | – | 50.1 MiB |
+| Federated + differential privacy | 67.2% | 26.6% | 0.723 | 0.937 | 5.2% | 7.5 | 32.0 MiB |
+| **Full privacy** (DP + SecAgg, FedAvg) | 67.2% | 26.6% | 0.723 | 0.937 | 5.2% | 7.5 | 50.1 MiB |
+| Full privacy (FedProx) | 64.4% | 17.9% | 0.688 | 0.934 | 5.1% | 7.5 | 50.1 MiB |
+| **Full privacy, tuned DP-SGD** (batch 512, lr 1e-2) | 85.2% | 46.9% | 0.857 | 0.965 | 5.2% | 8.0 | 50.1 MiB |
+
+"Data sent" for the centralized run is the raw training traffic that would have to be uploaded. For the federated runs it is model updates over all 20 rounds, both directions.
+
+**What the results show**
+
+1. **Federated learning costs no detection quality.** FedAvg catches 99.8% of zero-day attacks, against 99.9% when all data is pooled. It sends 32 MiB of model updates instead of 116 MiB of raw traffic, and no traffic leaves a gateway. A gateway training alone catches 95.3% but raises 7.6% false alarms, so collaboration helps.
+2. **Secure aggregation is free in accuracy.** FL + SecAgg matches FedAvg, and Full privacy gives exactly the same metrics as FL + DP. The cost is 57% more communication (32 → 50 MiB) for the masking protocol.
+3. **Differential privacy is the expensive part.** With default DP-SGD (σ = 1.0, ε = 7.5), zero-day recall drops to 67.2%. **Tuning DP-SGD at the same budget (ε = 8) recovers it to 85.2%**, with ROC-AUC 0.965.
+4. **The private autoencoder beats the classical baselines.** Even under full privacy, the tuned autoencoder (85.2%) catches more zero-day attacks than One-Class SVM (80.4%) or Isolation Forest (59.4%), and those baselines are trained on pooled data with no privacy at all.
+
+### Sweeps (full privacy, default DP-SGD; heterogeneity sweep with FedAvg)
+
+The privacy/accuracy trade-off. More noise gives a smaller ε (more private) and a weaker detector, while false alarms stay at about 5%:
+
+| Noise σ | 0.4 | 0.6 | 0.8 | 1 | 1.5 | 2.5 |
 |---|---|---|---|---|---|---|
-| Plain federated (FedAvg) | **99.8%** | 99.7% | 0.993 | 0.989 | 5.2% | – |
-| Full privacy, default settings (batch 128, lr 1e-3, σ = 1.0) | 67.2% | 26.6% | 0.723 | 0.937 | 5.2% | 7.5 |
-| Full privacy, tuned (batch 512, lr 1e-2, ε = 8) | **85.2%** | 46.9% | 0.857 | 0.965 | 5.2% | 8.0 |
+| Zero-day caught | 73.5% | 71.3% | 69.8% | 67.2% | 56.8% | 45.1% |
+| F1 | 0.794 | 0.768 | 0.752 | 0.723 | 0.608 | 0.506 |
+| ε | 88.6 | 26.1 | 12.2 | 7.5 | 3.8 | 1.9 |
+| Training time | 7.5 min | 8.2 min | 7.4 min | 6.8 min | 8.5 min | 6.6 min |
 
-**Tuning DP-SGD at a fixed budget (ε = 8, σ calibrated automatically).** Larger batches and a higher learning rate recover most of the accuracy lost to the privacy noise:
+Number of gateways. The 492k records are split across more gateways, so each one holds less data. With the same noise, that costs more ε and lowers detection:
+
+| Gateways | 3 | 5 | 10 | 20 |
+|---|---|---|---|---|
+| Zero-day caught | 75.2% | 70.6% | 67.2% | 45.2% |
+| F1 | 0.804 | 0.763 | 0.723 | 0.506 |
+| ε | 3.2 | 4.3 | 7.5 | 13.1 |
+| Training time | 5.6 min | 7.0 min | 7.7 min | 8.6 min |
+
+Local epochs per round. More local training improves detection but spends more privacy budget and time:
+
+| Local epochs | 1 | 2 | 5 |
+|---|---|---|---|
+| Zero-day caught | 48.0% | 67.2% | 73.8% |
+| F1 | 0.530 | 0.723 | 0.796 |
+| ε | 5.3 | 7.5 | 12.4 |
+| Training time | 4.7 min | 7.4 min | 15.8 min |
+
+Data heterogeneity. FedAvg stays at 99.4–99.8% zero-day recall from very different gateways (α = 0.1) to nearly identical ones (α = 10). At α = 0.3, known-attack recall drops to 57%, which lowers F1. This is a single-seed result.
+
+| Dirichlet α (FedAvg) | 0.1 | 0.3 | 1 | 10 |
+|---|---|---|---|---|
+| Zero-day caught | 99.6% | 99.4% | 99.7% | 99.8% |
+| F1 | 0.992 | 0.936 | 0.992 | 0.992 |
+| Training time | 2.1 min | 2.3 min | 2.2 min | 2.2 min |
+
+### Tuning DP-SGD at a fixed budget (ε = 8, σ calibrated automatically)
+
+Larger batches and a higher learning rate recover about half of the zero-day recall lost to the privacy noise (runs in `results/probe/`, made before the ε-step fix; the batch-128 row's client 4 ended at ε = 7.956 instead of 8):
 
 | Batch size | Learning rate | Zero-day caught | F1 | ROC-AUC |
 |---|---|---|---|---|
@@ -246,20 +312,23 @@ Measured on **N-BaIoT** (492,641 records from 9 real IoT devices, 115 features).
 | 1024 | 5e-3 | 80.1% | 0.831 | 0.962 |
 | 512 | 1e-2 | **85.2%** | **0.857** | **0.965** |
 
-Reproduce one row:
+The best setting is in the suite as `configs/full_ppfl_tuned.yaml`, and it reproduces 85.2% there.
+
+### Reproducibility checks
+
+* Four runs share the default full-privacy config (`full_ppfl`, `ppfl_sigma_1.0`, `ppfl_clients_10`, `ppfl_local_epochs_2`). All four give identical metrics.
+* `centralized`, `ppfl_sigma_0.4` and `ppfl_clients_3` were run twice. The second run produced bit-identical metrics with the same config fingerprint.
+* FedAvg (99.78% zero-day, F1 0.9928) and the tuned run (85.16%) match the earlier probe runs to every printed digit.
+* 80 automated tests pass (1 skipped, because Flower is not installed).
+
+Timing: the suite ran as 3 concurrent processes with 4 torch threads each, on a 16-thread AMD laptop CPU (23.7 GB RAM, no GPU). Wall-clock times are comparable with each other, but not with single-process runs.
+
+Reproduce everything (about 1 hour with 3 parallel processes, about 2.5 hours sequentially):
 
 ```bash
-python scripts/train.py --config configs/full_ppfl.yaml --set training.batch_size=512 --set training.learning_rate=0.01 --set privacy.target_epsilon=8 --name ppfl_tuned
+python scripts/run_experiments.py --suite all
+python scripts/evaluate.py --experiment fedavg --triage
 ```
-
-The full suite (`python scripts/run_experiments.py --suite all`) adds centralized and local-only references, FedProx, DP-only and SecAgg-only modes, and the noise, gateway-count, heterogeneity and local-epoch sweeps. It writes:
-
-* `results/summary.csv`: one row per (experiment, model) with every metric above.
-* `results/report.md`: Markdown tables built from the measured `metrics.json` files.
-* `results/figures/`: zero-day recall comparison, FPR comparison, centralized vs FL vs DP-FL vs full PPFL, communication cost, F1 vs ε, zero-day recall vs privacy level, convergence overlays and sweep plots.
-* `results/experiments/<name>/figures/`: loss and F1 per round, confusion matrices, reconstruction-error distributions, scores by class, ROC curves, ε per round, communication per round, client data distribution and per-client performance.
-
-Runs on the synthetic test data go to `results/synthetic/` and are watermarked. They only show that the pipeline works and are **not** research results.
 
 ## Operating Guide
 
@@ -332,7 +401,7 @@ Your browser opens at **http://localhost:8501** (use `--server.port 8502` if tha
 |---|---|
 | **Overview** | The problem, the approach, a diagram of one training round and the headline numbers from the finished experiment suite. |
 | **Train live** | Choose the dataset, privacy mode (full privacy, FL + secure aggregation, FL + DP, plain FedAvg, centralized), number of gateways and rounds, plus noise level σ, data heterogeneity α and seed under *Advanced settings*. **Start training** shows each gateway's data, then F1, zero-day recall, false alarms and ε after every round. The result view shows score distributions with the alert threshold, the detection rate per attack type and per-gateway results. |
-| **Detect attacks** | Streams held-out test records through a trained model in real time. Each record is reconstructed and scored on the spot, and the page counts alerts, zero-day attacks caught and false alarms. **Why was it flagged?** shows which traffic features the model could not reconstruct, and **What does it resemble?** retrieves the closest known traffic on that gateway ([Alert triage](#alert-triage-by-retrieval)). |
+| **Detect attacks** | Pick any trained model: your dashboard runs or any of the experiment-suite models. Streams held-out test records through it in real time. Each record is reconstructed and scored on the spot, and the page counts alerts, zero-day attacks caught and false alarms. **Why was it flagged?** shows which traffic features the model could not reconstruct, and **What does it resemble?** retrieves the closest known traffic on that gateway ([Alert triage](#alert-triage-by-retrieval)). |
 | **Compare results** | All methods side by side (zero-day recall, F1, ROC-AUC, false alarms, ε, data sent), the privacy/accuracy trade-off across noise levels, and the gateway, heterogeneity and local-epoch sweeps. |
 | **Under the hood** | Evidence you can check live: the secure-aggregation protocol running on three gateways (the masked numbers the server receives, and the exact sum it recovers, also when a gateway drops out), a registry of every experiment run (time, runtime, code version, config fingerprint), and a button that runs the test suite. |
 

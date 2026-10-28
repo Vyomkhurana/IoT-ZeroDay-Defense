@@ -1,0 +1,4 @@
+client,benign,gafgyt_combo,gafgyt_junk,gafgyt_scan,gafgyt_tcp,gafgyt_udp,mirai_ack,mirai_scan,mirai_syn,mirai_udp,mirai_udpplain
+client_0,66581,8189,7554,10429,10874,16918,10603,9449,10394,8572,12335
+client_1,31999,13840,14198,13384,14021,8972,11622,6808,10536,10239,8318
+client_2,74061,13971,14248,12187,11105,10110,5775,11743,7070,9189,7347

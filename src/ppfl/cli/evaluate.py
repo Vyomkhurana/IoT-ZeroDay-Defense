@@ -104,7 +104,7 @@ def main(argv: list[str] | None = None) -> int:
     save_json(results, out / "evaluation.json")
     print(f"\nEvaluation of '{args.experiment}'" + (" [SYNTHETIC DATA]" if synthetic else ""))
     print(f"{'model':<18}{'threshold':>12}{'unseen rec.':>12}{'known rec.':>12}{'F1':>9}{'FPR':>9}{'AUC':>9}")
-    for name, r in results.items():
+    for name, r in ((n, r) for n, r in results.items() if n != "triage"):
         s = r["summary"]
         print(f"{name:<18}{s['threshold']:>12.4g}{s['unseen_recall']:>12.4f}{s['known_recall']:>12.4f}{s['f1']:>9.4f}{s['fpr']:>9.4f}{s['roc_auc']:>9.4f}")
     if "autoencoder" in results:
